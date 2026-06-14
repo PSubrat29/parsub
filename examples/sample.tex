@@ -1,0 +1,63 @@
+\documentclass{article}
+\usepackage{amsmath}
+\begin{document}
+
+\title{Projectile Motion Analysis}
+\author{ParSub Demo}
+\date{\today}
+\maketitle
+
+\section{Introduction}
+We aim to analyze the trajectory of a projectile launched at an angle with initial velocity.
+
+\section{Equations of Motion}
+The parametric equations for projectile motion are:
+\begin{align}
+x(t) &= v_0 \cos(\theta) t \\
+y(t) &= v_0 \sin(\theta) t - \frac{1}{2} g t^2
+\end{align}
+where:
+\begin{itemize}
+\item $x(t)$ is the horizontal position at time $t$
+\item $y(t)$ is the vertical position at time $t$
+\item $v_0$ is the initial launch velocity
+\item $\theta$ is the launch angle (radians)
+\item $g$ is the acceleration due to gravity ($9.81  m/s^2$)
+\item $t$ is time
+\end{itemize}
+
+\section{Objective}
+We want to:
+\begin{enumerate}
+\item Plot the trajectory for different launch angles
+\item Find the maximum range as a function of launch angle
+\item Compute the time of flight
+\end{enumerate}
+
+\section{Trajectory Equation}
+Eliminating $t$, we get the trajectory equation:
+\begin{equation}
+y = x \tan(\theta) - \frac{g x^2}{2 v_0^2 \cos^2(\theta)}
+\end{equation}
+
+\section{Range Equation}
+The range $R$ (horizontal distance when $y=0$) is given by:
+\begin{equation}
+R = \frac{v_0^2 \sin(2\theta)}{g}
+\end{equation}
+
+\section{Time of Flight}
+The time of flight $T$ is:
+\begin{equation}
+T = \frac{2 v_0 \sin(\theta)}{g}
+\end{equation}
+
+\section{Parameters}
+In our analysis, we will vary:
+\begin{itemize}
+\item Launch angle $\theta$ from $0$ to $\frac{\pi}{2}$ radians
+\item Initial velocity $v_0$ = 20 m/s (fixed)
+\item Gravity $g$ = 9.81 m/s^2 (fixed)
+\end{itemize}
+
+\end{document}

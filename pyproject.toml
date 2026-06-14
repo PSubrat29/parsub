@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ParSub"
+version = "0.1.0"
+description = "Agentic Math/Physics research tool for LaTeX analysis and numerical evaluation"
+authors = [
+    {name = "ParSub Developer", email = "developer@example.com"}
+]
+dependencies = [
+    "numpy>=1.24.0",
+    "scipy>=1.10.0",
+    "matplotlib>=3.7.0",
+    "plotly>=5.15.0",
+    "sympy>=1.12",
+    "latexwalker>=2.1",
+    "pandas>=2.0.0",
+    "openpyxl>=3.1.0",
+    "typer>=0.9.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.23.0",
+    "python-dotenv>=1.0.0",
+    "pytest>=7.0.0"
+]
+[project.urls]
+Homepage = "https://github.com/parsub/research-tool"
+Documentation = "https://github.com/parsub/research-tool#readme"
+Repository = "https://github.com/parsub/research-tool"
+
+[project.scripts]
+parsub = "parsub.cli:main"
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = ["-v"]
