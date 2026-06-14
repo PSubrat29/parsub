@@ -25,9 +25,9 @@ dependencies = [
     "pytest>=7.0.0"
 ]
 [project.urls]
-Homepage = "https://github.com/parsub/research-tool"
-Documentation = "https://github.com/parsub/research-tool#readme"
-Repository = "https://github.com/parsub/research-tool"
+Homepage = "https://github.com/PSubrat29/parsub"
+Documentation = "https://github.com/PSubrat29/parsub#readme"
+Repository = "https://github.com/PSubrat29/parsub"
 
 [project.scripts]
 parsub = "parsub.cli:main"
