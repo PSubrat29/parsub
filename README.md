@@ -272,6 +272,7 @@ If you make improvements:
 
 ---
 
+*✅ Publishing complete: ParSub v0.1.0 is now live at https://github.com/PSubrat29/parsub*
 *Note: These instructions assume you have granted me collaborator access to your GitHub repository at https://github.com/PSubrat29*
 
 ## 🙏 Acknowledgements
