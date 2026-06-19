@@ -5,8 +5,9 @@ LaTeX parser for extracting mathematical expressions and structures.
 import re
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
-from latexwalker import parse_latex
-from latexwalker.expression import LatexExpressionNode, LatexCharsNode, LatexGroupNode, LatexMacroNode, LatexEnvironmentNode
+from pylatexenc.latexwalker import get_latex_nodes
+from pylatexenc.latexwalker import LatexMathNode, LatexCharsNode, LatexGroupNode, LatexMacroNode, LatexEnvironmentNode
+
 import sympy as sp
 
 
@@ -58,7 +59,7 @@ class LaTeXParser:
         """
         try:
             # Parse the LaTeX
-            parsed, pos, _ = parse_latex(latex_source)
+            parsed, pos, _ = get_latex_nodes(latex_source)
 
             # Extract mathematical expressions
             expressions = self._extract_expressions(parsed)
@@ -94,7 +95,7 @@ class LaTeXParser:
             if hasattr(node, 'nodelist') and node.nodelist:
                 for child in node.nodelist:
                     _recursive_extract(child)
-            elif isinstance(node, LatexExpressionNode):
+            elif isinstance(node, LatexMathNode):
                 # Convert to SymPy expression if possible
                 latex_str = self._node_to_latex(node)
                 sympy_expr = self._latex_to_sympy(latex_str)
@@ -116,7 +117,7 @@ class LaTeXParser:
                 # Handle macros like \frac, \sqrt, etc.
                 _recursive_extract(node)
 
-        _recursive_extract(parsed)
+        _recursive_extract(nodes)
         return expressions
 
     def _node_to_latex(self, node) -> str:

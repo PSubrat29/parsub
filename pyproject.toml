@@ -7,7 +7,7 @@ name = "ParSub"
 version = "0.1.0"
 description = "Agentic Math/Physics research tool for LaTeX analysis and numerical evaluation"
 authors = [
-    {name = "ParSub Developer", email = "developer@example.com"}
+    {name = "ParSub Developer SParida", email = "paridasubrat553@gmail.com"}
 ]
 dependencies = [
     "numpy>=1.24.0",
@@ -15,6 +15,7 @@ dependencies = [
     "matplotlib>=3.7.0",
     "plotly>=5.15.0",
     "sympy>=1.12",
+    "rich>=11.0.0",
     "pylatexenc>=2.1",
     "pandas>=2.0.0",
     "openpyxl>=3.1.0",

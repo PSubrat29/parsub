@@ -6,7 +6,7 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
-from rich.progress import Progress, SpinnerBar, TextColumn
+from rich.progress import Progress, SpinnerColumn, TextColumn
 import sys
 from pathlib import Path
 
@@ -18,13 +18,13 @@ from parsub.analyzer.expression_analyzer import analyze_expressions
 from parsub.generator.code_generator import generate_code_from_tasks
 
 app = typer.Typer(name="parsub", help="Agentic Math/Physics research tool for LaTeX analysis")
-console = Console()
+console = Console(legacy_windows=True, force_jupyter=False, force_terminal=False)
 
 
 @app.command()
 def analyze(
     latex_file: str = typer.Argument(..., help="Path to LaTeX source file"),
-    output_dir: str = typer.Default("./output", help="Output directory for generated code and results"),
+    output_dir: str = typer.Option("./output", help="Output directory for generated code and results"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output")
 ):
     """
@@ -48,7 +48,7 @@ def analyze(
 
     # Parse LaTeX
     with Progress(
-        SpinnerBar(),
+        SpinnerColumn(spinner_name="dots", style="bold cyan"),
         TextColumn("[progress.description]{task.description}"),
         console=console
     ) as progress:
@@ -106,7 +106,7 @@ def analyze(
 @app.command()
 def run(
     code_file: str = typer.Argument(..., help="Path to generated Python code file"),
-    output_dir: str = typer.Default("./output", help="Directory where results will be saved")
+    output_dir: str = typer.Option("./output", help="Directory where results will be saved")
 ):
     """
     Execute generated Python code to compute results and generate plots.
@@ -162,7 +162,7 @@ def run(
 @app.command()
 def demo():
     """Run a demonstration with sample LaTeX input."""
-    console.print(Panel.fit("🎯 ParSub Demo", style="magenta"))
+    console.print(Panel.fit("[demo] ParSub Demo", style="magenta"))
 
     # Sample LaTeX expressions
     sample_latex = r"""
@@ -196,9 +196,10 @@ def demo():
     """
 
     with Progress(
-        SpinnerBar(),
+        SpinnerColumn(spinner_name="dots", style="bold cyan"),
         TextColumn("[progress.description]{task.description}"),
-        console=console
+        console=console,
+        disable=True
     ) as progress:
         task1 = progress.add_task("Parsing sample LaTeX...", total=None)
         parsed_result = parse_latex_source(sample_latex)
@@ -221,8 +222,8 @@ def demo():
         progress.update(task3, description="✅ Demo code generated")
 
     console.print(f"\n[green]Demo completed![/green]")
-    console.print(f"📁 Demo files saved to: {demo_dir}")
-    console.print(f"📄 Generated code: {code_file}")
+    console.print(f"[folder] Demo files saved to: {demo_dir}")
+    console.print(f"[file] Generated code: {code_file}")
     console.print(f"\nTo run the demo:")
     console.print(f"  parsub run {code_file} --output-dir {demo_dir}")
 

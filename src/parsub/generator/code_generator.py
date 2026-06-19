@@ -462,13 +462,12 @@ expr_{task_num} = sp.sympify("{expression}")
             # Partial derivatives
             derivatives = []
             for var in variables:
-                deriv = sp.diff(expr_{task_num}, var)
-                derivatives.append((var, deriv))
+                derivatives.append(var)
 
             code += f'''
 # Compute partial derivatives
 '''
-            for var, deriv in derivatives:
+            for var in derivatives:
                 code += f'''deriv_{task_num}_{var} = sp.diff(expr_{task_num}, '{var}')
 '''
 
@@ -476,7 +475,7 @@ expr_{task_num} = sp.sympify("{expression}")
 # Save results
 derivatives_dict = {{}}
 '''
-            for var, _ in derivatives:
+            for var in derivatives:
                 code += f"derivatives_dict['{var}'] = str(deriv_{task_num}_{var})\\n"
 
             code += f'''
