@@ -1,63 +1,215 @@
-\documentclass{article}
-\usepackage{amsmath}
+% ----------------------------------------------------------------
+% AMS-LaTeX Paper ************************************************
+% **** -----------------------------------------------------------
+\documentclass{amsart}
+\usepackage{amssymb,amsmath,amsthm,mathrsfs}
+\usepackage{cite}
+\usepackage{breqn}
+\usepackage{graphicx}
+% ----------------------------------------------------------------
+\vfuzz2pt % Don't report over-full v-boxes if over-edge is small
+\hfuzz2pt % Don't report over-full h-boxes if over-edge is small
+% THEOREMS -------------------------------------------------------
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{cor}[theorem]{Corollary}
+\newtheorem{lem}[theorem]{Lemma}
+\newtheorem{prop}[theorem]{Proposition}
+\theoremstyle{definition}
+\newtheorem{defn}[theorem]{Definition}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+\newtheorem{note}[theorem]{Note}
+\numberwithin{equation}{section}
+% MATH -----------------------------------------------------------
+\newcommand{\norm}[1]{\left\Vert#1\right\Vert}
+\newcommand{\abs}[1]{\left\vert#1\right\vert}
+\newcommand{\set}[1]{\left\{#1\right\}}
+\newcommand{\Real}{\mathbb R}
+\newcommand{\eps}{\varepsilon}
+\newcommand{\To}{\longrightarrow}
+\newcommand{\BX}{\mathbf{B}(X)}
+\newcommand{\A}{\mathcal{A}}
+% ----------------------------------------------------------------
 \begin{document}
+\title[A Note On Generalized Bessel Function]{A Note On Generalized Bessel Function}%
+\author{%%%% Author details
+Subrat Parida$^\dag$}
+%%%%%%%%% Insert author address here
+\address{$^\dag$Department of Mathematics \\ Ramanujan School of Mathematical Sciences \\ Pondicherry University-A Central University \\ Pondicherry 605014, India.}
+\email{paridasubrat553@gmail.com}
+\subjclass[2020]{ Primary 33C10, 33C15, 30E15; Secondary 33B15, 33C99, 33C45.}
+\keywords{Generalized Bessel Function, Hypergeometric Functions, Bessel-Clifford function, Laguerre Polynomials, Kummer's transformation formulas}
 
-\title{Projectile Motion Analysis}
-\author{ParSub Demo}
-\date{\today}
+%\date{}%
+%\dedicatory{}%
+%\commby{}%
+% ----------------------------------------------------------------
+\begin{abstract}
+The subject of this paper is the generalized Bessel functions, which were introduced by \'{A}rp\'{a}d Baricz.  We showed some relationships connecting different mathematical functions and polynomials with generalized Bessel functions. It included Hypergeometric, Bessel-Clifford, and Laguerre Polynomial representations of generalized Bessel functions.
+\end{abstract}
 \maketitle
+% ----------------------------------------------------------------
+\section{INTRODUCTION}
+We begin by recalling the Gamma function $\Gamma(z)$,
+  \begin{equation}\label{1}
+    \Gamma (z) = \int_{0}^{\infty} e^{-l} l^{z-1} dl \,\,\,\,\, (\Re(z)>0),
+  \end{equation}which appeared in 1729 and 1730 from Leonard Euler to Christian Goldbach.
+  The Euler's Beta function $B(\zeta, \eta)$ is a function of two complex variables $\zeta$ and $\eta$ defined by\cite{Rain};
+ \begin{equation}\label{2}
+     B(\zeta, \eta) = \frac{\Gamma (\zeta) \Gamma(\eta)}{\Gamma (\zeta + \eta)}, \, \, \, \, \, (\zeta, \eta \notin \mathbb {Z}^{-} _{0}),
+ \end{equation} and the integral representation of the Beta function is;
+ \begin{equation}\label{3}
+   B(\zeta, \eta) = \int_{0}^{1} l^{\zeta-1} (1-l)^{\eta-1} dl \, \, \, \, (\Re(\zeta)>0; \Re (\eta)),
+ \end{equation}where $\mathbb {Z}_{0} ^{-}$ denotes the set of non-positive integer.
+  The generalized hypergeometric function (series) is defined as follows\cite{Whit, Erd};
+\begin{equation}\label{4}
+  _{g}F_{h} (\xi_{1}, \xi_{2},..., \xi_{g};\tau_{1}, \tau_{2},..., \tau_{h}; z) = \sum_{k=0}^{\infty} \frac{(\xi_{1})_{k}... (\xi_{g})_{k}}{(\tau_{1})_{k}... (\tau_{h})_{k}} \frac{(z)^{k}}{k!},
+\end{equation} where $m\geq1$ and $n\geq1$ are integers,
+while $\xi_{1}, \xi_{2},..., \xi_{g}, \tau_{1}, \tau_{2},..., \tau_{h}$ are complex numbers such that, $\tau_{j} \neq 0,-1,-2,...,$ for all $j \in \{1,2,...,n\}$, and where $(\varpi)_{n}$ (for $\varpi \in \mathbb{C}$) denotes the Pochhammer symbol given by\cite{Rain};
+\begin{equation}\label{5}
+         (\varpi)_{n} := \frac{\Gamma (\varpi + n)}{\Gamma (\varpi)}=
+                 \begin{cases}
+                   1, &  (n=0), \\
+                   \varpi (\varpi+1)...(\varpi+n-1), & (n \in \mathbb{N}).
+                 \end{cases}
+       \end{equation}
+For $m=1,\, n=1, a_{1}=a,$ and $b_{1}=c$, the series in \eqref{4} is denoted as $_{1}F_{1} (a;c;z)$ and called as Confluent hypergeometric function.
+In 1837 E. E. Kummer\cite{Kum} formulated two interesting transformation formulas for the confluent hypergeometric function. Kummer's first and second transformation formulas as follows;
+\begin{equation}\label{6}
+ _{1}F_{1} (\varepsilon; \varrho; z) =\, e^{z}\, _{1}F_{1} (\varrho-\varepsilon; \varepsilon; z),
+\end{equation}
+\begin{equation}\label{7}
+ _{1}F_{1} (\varepsilon; 2\varepsilon; 2z) =\, e^{z}\, _{0}F_{1} \left(-; \varepsilon+\frac{1}{2}; \frac{z^{2}}{4}\right).
+\end{equation}
+  The generalized Bessel differential equation is introduced by \'{A}rp\'{a}d Baricz in 2006, which as follows\cite{Bar-1, Bar-3, Bar-4};
+\begin{equation}\label{8}
+  z^{2} w^{\prime \prime}(z) + b z w^{\prime}(z) + [cz^{2} - \alpha^{2} + (1-b)\alpha] w(z) = 0.
+\end{equation}
+The particular solution of \eqref{8} denoted as $w_{\alpha} (z)$, for $z \in \mathbb{C}$ is defined by;
+\begin{equation}\label{9}
+  {w_{\alpha} (z) = \sum_{n=0}^{\infty} \frac{(-c)^{n}}{n! \, \Gamma \left(\alpha+n+\frac{b+1}{2} \right)} \, \left(\frac{z}{2} \right)^{\alpha+2n}\,\,\,\,\,\,\, (\forall z \in \mathbb{C})}.
+\end{equation}
+Clearly, by the ratio test, the radius of convergence of the series $w_{\alpha} (z)$ can be obtained as infinity and so that $w_{\alpha} (z)$ is convergent for all $b, c, \alpha, z \in \mathbb{C}$.
+The expression in \eqref{9} is called the Generalized Bessel Function of the first kind of the complex order $\alpha$.
+ It is clear that, for $c=1$, $b=1$ the function $w_{\alpha} (z)$ reduces to $J_{\alpha} (z)$ \,(the Classical Bessel Function of the first kind) and for $c=-1$, $b=1$ the function $w_{\alpha} (z)$ reduces to $I_{\alpha} (z)$ \,(the modified Bessel function of the first kind).
+Similarly, when $c=1$ and $b=2$ the function $w_{\alpha}$ reduces to $\frac{2}{\sqrt{\pi}} j_{\alpha}$\, ($j_{\alpha}$- the spherical Bessel function of the first kind), while for $c=-1$ and $b=2$ the function $w_{\alpha}$ reduces to $\frac{2}{\sqrt{\pi}} i_{\alpha}$\, ($i_{\alpha}$- the modified spherical Bessel function of the first kind). Further, we get $w_{\alpha} (0)=0$.
 
-\section{Introduction}
-We aim to analyze the trajectory of a projectile launched at an angle with initial velocity.
+\section{Relation to some functions and polynomials}
+In this section we have studied the relationship of generalized Bessel functions with Bessel-Clifford function, Hypergeometric functions, and Laguerre Polynomials.
+\subsection{Relation to Bessel-Clifford function}
+For the convenience we shall take $\vartheta = \alpha + \frac{b+1}{2}$, such that $\vartheta \neq 0, -1, -2, ...$ \, then \eqref{9} can be written as;
+\begin{equation}\label{10}
+  {w_{\alpha} (z) = \left(\frac{z}{2}\right)^{\alpha}\, \sum_{n=0}^{\infty} \frac{1}{\Gamma(\vartheta+n)}\, \frac{\left(\frac{-cz^{2}}{4}\right)^{n}}{n!} \,\,\,\,\,\,\, (\forall z \in \mathbb{C})}.
+\end{equation}
+The Bessel-Clifford function, which is an entire function of two complex variables, is defined by the series\cite{Gree, Clif, Wat},
+\begin{equation}\label{11}
+  \mathcal{C}_{\vartheta} (z) = \sum_{n=0}^{\infty} \pi(n+\vartheta) \frac{z^{n}}{n!}
+\end{equation} where, $\pi(x)$ is the reciprocal gamma function is given by, \begin{equation}\label{12}
+                        \pi(x) = \frac{1}{\Gamma(x+1)},
+                      \end{equation}
+so that we get,
+\begin{equation}\label{13}
+  {\mathcal{C}_{\vartheta} (z) = \sum_{n=0}^{\infty} \frac{1}{\Gamma(n+\vartheta+1)} \frac{z^{n}}{n!}}.
+\end{equation}
+Taking the transformation $z\mapsto \frac{-cz^{2}}{4}$ and replacing $a\mapsto a-1$ in the above \eqref{13} yields,
+\begin{equation}\label{14}
+  \mathcal{C}_{\vartheta-1} \left(\frac{-cz^{2}}{4}\right) = \sum_{n=0}^{\infty} \frac{1}{\Gamma(\vartheta+n)}\, \frac{\left(\frac{-cz^{2}}{4}\right)^{n}}{n!}.
+\end{equation}
+Thus from \eqref{10} and \eqref{14}, we obtain
+\begin{equation}\label{15}
+  w_{\alpha} (z) = \left(\frac{z}{2}\right)^{\alpha}\, \mathcal{C}_{\vartheta-1} \left(\frac{-cz^{2}}{4}\right),
+\end{equation}where $\vartheta \neq0,-1,-2,...$ and $\vartheta = \alpha + \frac{b+1}{2}$ such that $\alpha,b,c \in \mathbb{C}$.
 
-\section{Equations of Motion}
-The parametric equations for projectile motion are:
-\begin{align}
-x(t) &= v_0 \cos(\theta) t \\
-y(t) &= v_0 \sin(\theta) t - \frac{1}{2} g t^2
-\end{align}
-where:
-\begin{itemize}
-\item $x(t)$ is the horizontal position at time $t$
-\item $y(t)$ is the vertical position at time $t$
-\item $v_0$ is the initial launch velocity
-\item $\theta$ is the launch angle (radians)
-\item $g$ is the acceleration due to gravity ($9.81  m/s^2$)
-\item $t$ is time
-\end{itemize}
-
-\section{Objective}
-We want to:
-\begin{enumerate}
-\item Plot the trajectory for different launch angles
-\item Find the maximum range as a function of launch angle
-\item Compute the time of flight
-\end{enumerate}
-
-\section{Trajectory Equation}
-Eliminating $t$, we get the trajectory equation:
-\begin{equation}
-y = x \tan(\theta) - \frac{g x^2}{2 v_0^2 \cos^2(\theta)}
+\subsection{Relation to Hypergeometric functions}
+The Bessel-Clifford function in terms of Hypergeometric function is defined as\cite{Wat}:
+\begin{equation}\label{16}
+  \mathcal{C}_{\vartheta} (z) = \pi(\vartheta)\,  _{0}F_{1} (-; \vartheta+1; z),\,\,\,\,\,\,\,\, \vartheta \neq 0,-1,-2,...
+\end{equation}Using \eqref{12}, by taking the transformation $z\mapsto \frac{-cz^{2}}{4}$ and replacing $\vartheta \mapsto \vartheta-1$ in the above \eqref{16} yields,
+\begin{equation}\label{17}
+  \mathcal{C}_{\vartheta-1} \left(\frac{-cz^{2}}{4}\right) = \frac{1}{\Gamma(\vartheta)}\, _{0}F_{1} \left(-; \vartheta;\frac{-cz^{2}}{4} \right).
+\end{equation}
+From \eqref{15} and \eqref{17}, we obtain
+\begin{equation}\label{18}
+  w_{\alpha} (z) = \frac{(z/2)^{\alpha}}{\Gamma (\vartheta)}\, _{0}F_{1} \left(-; \vartheta;\frac{-cz^{2}}{4} \right),
+\end{equation}where $\vartheta \neq0,-1,-2,...$ and $\vartheta = \alpha + \frac{b+1}{2}$ such that $\alpha,b,c,z \in \mathbb{C}$.
+From the Kummer's second transformation formula\eqref{7}, and by taking the transformation $z\mapsto iz \sqrt{c}$ and replacing $\vartheta \mapsto \vartheta - \frac{1}{2}$, we get
+\begin{equation}\label{19}
+  _{0}F_{1} \left(-; \vartheta;\frac{-cz^{2}}{4} \right) = \exp(-i z \sqrt{c})\, _{1}F_{1} \left(\vartheta-\frac{1}{2}; 2{\vartheta}-1; 2i z \sqrt{c} \right),
+\end{equation}where $i=\sqrt{-1}$. Putting \eqref{19} in \eqref{18}, we obtain
+\begin{equation}\label{20}
+  w_{\alpha} (z) = \frac{(z/2)^{\alpha}\, \, \exp(-i z \sqrt{c})}{\Gamma(\vartheta)} \, _{1}F_{1} \left(\vartheta-\frac{1}{2}; 2{\vartheta}-1; 2i z \sqrt{c} \right),
+\end{equation} where $\vartheta \neq0,-1,-2,...$ and $\vartheta = \alpha + \frac{b+1}{2}$ such that $\alpha,b,c,z \in \mathbb{C}$.
+\subsection{Relation to Laguerre Polynomials}
+The Generalized Laguerre Polynomial (GLP) of degree $k$ with $\vartheta \in \mathbb{C}$ is denoted as $\mathcal{L}_{k} ^{(\vartheta)} (z)$, for all $z\in \mathbb{C}$.
+ For $\Re(\vartheta)\geqslant1$ and $k \in \mathbb{N}_{0}$, the series representation of the polynomials  $\mathcal{L}_{k} ^{(\vartheta)} (z)$ can be represented by\cite{Erd};
+ \begin{equation}\label{21}
+   \mathcal{L}_{k} ^{(\vartheta)} (z) = \sum_{m=0}^{k} \frac{(-1)^{m}\, (1+\vartheta)_{k}}{(1+\vartheta)_{m}\, (k-m)!\, m!} \, z^{m}.
+ \end{equation}
+The relation to GLP and hypergeometric function\cite{Erd}, we have
+\begin{equation}\label{22}
+  _{0}F_{1} (-; 1+\vartheta; -zt) = e^{-t} \, \sum_{k=0}^{\infty} \frac{\mathcal{L}_{k} ^{(\vartheta-1)} (z)}{(1+\vartheta)_{k}}\, t^{k}.
+\end{equation}
+Taking the transformation, $z\mapsto \frac{cz^{2}}{4t}$ and replacing $a\mapsto \vartheta-1$ in the above \eqref{22} yields,
+\begin{equation}\label{23}
+  _{0}F_{1} \left(-; \vartheta;\frac{-cz^{2}}{4} \right) = e^{-t} \, \sum_{k=0}^{\infty} \frac{\mathcal{L}_{k} ^{(\vartheta-1)} \left(\frac{cz^{2}}{4t}\right)}{(\vartheta)_{k}} t^{k}.
+\end{equation}
+Since, $(\vartheta)_{k} = \frac{\Gamma(\vartheta+k)}{\Gamma(\vartheta)}$, putting in the above expression and from \eqref{18} and \eqref{23}, we obtain
+\begin{equation}\label{24}
+w_{\alpha} (z) = \left(\frac{z}{2}\right)^{\alpha} e^{-t}\,\sum_{k=0}^{\infty} \frac{\mathcal{L}_{k} ^{(\vartheta-1)} \left(\frac{cz^{2}}{4t}\right)}{\Gamma(\vartheta+k)} t^{k}.
+\end{equation}
+For the transformation, $z\mapsto 2\left(\frac{zt}{c}\right)^{1/2}$ in \eqref{24}, we get
+\begin{equation}\label{25}
+  e^{t} \left(\frac{zt}{c}\right)^{-\alpha/2} w_{\alpha} \left[2\left(\frac{zt}{c}\right)^{1/2} \right] = \sum_{k=0}^{\infty} \frac{\mathcal{L}_{k} ^{(\vartheta-1)} (z)}{\Gamma(\vartheta+k)}\, t^{k},
+\end{equation}
+where $\vartheta \neq0,-1,-2,...$ and $\vartheta = \alpha + \frac{b+1}{2}$ such that $\alpha,b,c,z \in \mathbb{C}$.
+  The Normalized Laguerre Polynomial is defined by\cite{Praj};
+\begin{equation}\label{a}
+  \mathcal{M}_{k,\vartheta} (z) = \frac{k!}{(1+\vartheta)_{k}}\, \mathcal{L}_{k}^{(\vartheta)} (z),\,\,\,\,\,\,\,\,\,\,\, (\Re(\vartheta)>-1,\, k\in \mathbb{N}_{0}),
+\end{equation}
+replacing $\vartheta \mapsto \vartheta-1$ in \eqref{a}, then putting that expression in \eqref{25} with some simplification, we obtain
+\begin{equation}\label{b}
+  \Gamma(\vartheta)\, e^{t}\, \left(\frac{zt}{c}\right)^{-\alpha/2} w_{\alpha} \left[2\left(\frac{zt}{c}\right)^{1/2} \right] = \sum_{k=0}^{\infty} \mathcal{M}_{k,\vartheta-1} (z) \frac{t^{k}}{k!}.
 \end{equation}
 
-\section{Range Equation}
-The range $R$ (horizontal distance when $y=0$) is given by:
-\begin{equation}
-R = \frac{v_0^2 \sin(2\theta)}{g}
-\end{equation}
+\section{Conclusion}
+This study has delved into the fascinating world of generalized Bessel functions, showcasing their profound mathematical significance. Our findings have important implications for the connection of other functions and polynomials with the Generalized Bessel functions. In essence, this research underscores the enduring importance of generalized Bessel functions in theoretical mathematics. We hope that these findings will inspire further exploration and innovation in the field of mathematics.
 
-\section{Time of Flight}
-The time of flight $T$ is:
-\begin{equation}
-T = \frac{2 v_0 \sin(\theta)}{g}
-\end{equation}
 
-\section{Parameters}
-In our analysis, we will vary:
-\begin{itemize}
-\item Launch angle $\theta$ from $0$ to $\frac{\pi}{2}$ radians
-\item Initial velocity $v_0$ = 20 m/s (fixed)
-\item Gravity $g$ = 9.81 m/s^2 (fixed)
-\end{itemize}
 
-\end{document}
+
+
+\begin{thebibliography}{9}
+\bibitem{And-Bar}
+ Baricz \'{A}. and Andras S. (2009). \emph{Monotonicity property of generalized and normalized Bessel functions of complex order.} Complex Var. Elliptic Equ., 54(7) , 689–696
+\bibitem{Bar-1}
+Baricz \'{A}.(2006). \emph{Geometric properties of generalized Bessel functions of complex order.} Mathematica, 48(71)(1) , 13–18.
+\bibitem{Bar-2}
+Baricz \'{A}.(2006). \emph{Bessel transforms and Hardy space of generalized Bessel functions.} Mathematica, 48(71)(2) , 127–136.
+\bibitem{Bar-3}
+Baricz \'{A}.(2008). \emph{Geometric properties of generalized Bessel functions.} Publ. Math. Debrecen, 73, 155–178.
+\bibitem{Bar-4}
+Baricz \'{A}.(2008). \emph{Generalized Bessel Functions of the First Kind. Ph.D. thesis}, Babes¸-Bolyai University, Cluj-Napoca.
+\bibitem{Clif}
+Clifford WK.(1882). \emph{On Bessel's Functions}, Mathematical Papers, London:346-349.
+\bibitem{Erd}
+Erd\'{e}lyi A. and Bateman H.(1953). (Bateman Manuscript Project), \emph{Higher Transcendental Functions}, Volume-III, Mc-Graw-Hill.
+\bibitem{Gree}
+Greenhill AG.(1919). \emph{The Bessel-Clifford Function, and its applications}, Philosophical Magazine, Sixth Series, 501-528.
+\bibitem{Kum}
+Kummer EE.(1837). \emph{De integralibus quibusdam definitis et seriebus infinitis}, Journal f\"{u}r die reine und angewandte Mathematik,\textbf{17}, 228-242.
+\bibitem{Praj}
+Prajapat JK.(2023). \emph{Characterization properties of the normalized Laguerre polynomials}, A Conference Paper(29th ICFIDCAA), India.
+\bibitem{Rain}
+Rainville ED.(1971). \emph{Special Functions}, Macmillan Company, New York, (1960); Reprinted by \emph{Chelsea Publishing Company}, Bronx, New York.
+\bibitem{Wat}
+Watson GN.(1944). \emph{A Treatise on the Theory of Bessel Functions.} Cambridge University Press, Cambridge.
+\bibitem{Whit}
+Whittaker ET and Watson GN.(1958). \emph{A Course of Modern Analysis.} 4th ed. Cambridge
+University Press.
+
+
+\end{thebibliography}
+
+
+
+\end{document} 

@@ -106,6 +106,9 @@ class LaTeXParser:
                 )
                 if sympy_expr:
                     expr.variables = [str(var) for var in sympy_expr.free_symbols]
+                else:
+                    # Even if SymPy conversion fails, we still want to capture the expression
+                    expr.variables = []
                 expressions.append(expr)
             elif isinstance(node, LatexGroupNode):
                 _recursive_extract(node)

@@ -30,7 +30,7 @@ def analyze(
     """
     Analyze LaTeX source file and generate Python code for numerical evaluation.
     """
-    console.print(Panel.fit("🔬 ParSub - Agentic Math/Physics Research Tool", style="blue"))
+    console.print(Panel.fit("[microscope] ParSub - Agentic Math/Physics Research Tool", style="blue"))
 
     # Read LaTeX file
     try:
@@ -50,7 +50,8 @@ def analyze(
     with Progress(
         SpinnerColumn(spinner_name="dots", style="bold cyan"),
         TextColumn("[progress.description]{task.description}"),
-        console=console
+        console=console,
+        disable=True
     ) as progress:
         task1 = progress.add_task("Parsing LaTeX...", total=None)
         parsed_result = parse_latex_source(latex_source)
@@ -73,11 +74,11 @@ def analyze(
 
     # Display results
     console.print("\n[green]Analysis Complete![/green]")
-    console.print(f"📄 Input file: {latex_file}")
-    console.print(f"📝 Expressions found: {len(parsed_result.get('expressions', []))}")
-    console.print(f"⚙️  Computation tasks: {len(analyzed_tasks)}")
-    console.print(f"💾 Generated code: {code_file}")
-    console.print(f"📁 Output directory: {output_dir}")
+    console.print(f"[file] Input file: {latex_file}")
+    console.print(f"[expressions] Expressions found: {len(parsed_result.get('expressions', []))}")
+    console.print(f"[tasks] Computation tasks: {len(analyzed_tasks)}")
+    console.print(f"[code] Generated code: {code_file}")
+    console.print(f"[folder] Output directory: {output_dir}")
 
     if verbose:
         console.print("\n[yellow]Extracted Information:[/yellow]")
@@ -111,7 +112,7 @@ def run(
     """
     Execute generated Python code to compute results and generate plots.
     """
-    console.print(Panel.fit("🚀 Running ParSub Generated Code", style="green"))
+    console.print(Panel.fit("[rocket] Running ParSub Generated Code", style="green"))
 
     code_path = Path(code_file)
     if not code_path.exists():
@@ -138,12 +139,12 @@ def run(
         )
 
         if result.returncode == 0:
-            console.print("[green]✅ Code executed successfully![/green]")
+            console.print("[green]Success: Code executed successfully![/green]")
             if result.stdout:
                 console.print("\n[blue]Output:[/blue]")
                 console.print(result.stdout)
         else:
-            console.print("[red]❌ Code execution failed![/red]")
+            console.print("[red]Error: Code execution failed![/red]")
             if result.stderr:
                 console.print("[red]Error output:[/red]")
                 console.print(result.stderr)
@@ -152,7 +153,7 @@ def run(
                 console.print(result.stdout)
 
     except subprocess.TimeoutExpired:
-        console.print("[red]❌ Code execution timed out (2 minutes)[/red]")
+        console.print("[red]Error: Code execution timed out (2 minutes)[/red]")
         raise typer.Exit(1)
     except Exception as e:
         console.print(f"[red]Error running code: {e}[/red]")
