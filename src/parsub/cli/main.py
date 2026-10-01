@@ -2,246 +2,224 @@
 Command-line interface for ParSub.
 """
 
+import os
+import subprocess
+from pathlib import Path
+from typing import Optional
+
 import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
-from rich.progress import Progress, SpinnerColumn, TextColumn
-import sys
-from pathlib import Path
+from rich.table import Table
 
-# Add src to path so we can import parsub modules
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from parsub import __version__
+from parsub.core.pipeline import AnalysisResult, analyze_latex, read_run_summary, run_generated_code
 
-from parsub.parser.latex_parser import parse_latex_source
-from parsub.analyzer.expression_analyzer import analyze_expressions
-from parsub.generator.code_generator import generate_code_from_tasks
+app = typer.Typer(
+    name="parsub",
+    help="Agentic Math/Physics research tool: turn LaTeX mathematics into runnable Python computations.",
+    add_completion=False,
+    no_args_is_help=True,
+)
+console = Console()
 
-app = typer.Typer(name="parsub", help="Agentic Math/Physics research tool for LaTeX analysis")
-console = Console(legacy_windows=True, force_jupyter=False, force_terminal=False)
+DEMO_LATEX = r"""
+\documentclass{article}
+\begin{document}
+
+We aim to compute the trajectory of a projectile under gravity.
+
+The equation of motion is given by:
+\begin{equation}
+y = x \tan(\theta) - \frac{g x^2}{2 v_0^2 \cos^2(\theta)}
+\end{equation}
+
+where:
+\begin{itemize}
+\item $y$ is the height
+\item $x$ is the horizontal distance
+\item $\theta$ is the launch angle
+\item $v_0$ is the initial velocity
+\item $g$ is the gravitational acceleration ($g = 9.81$)
+\end{itemize}
+
+We want to plot the trajectory for different angles and find the maximum range.
+
+The range equation is:
+\begin{equation}
+R = \frac{v_0^2 \sin(2\theta)}{g}
+\end{equation}
+
+\end{document}
+"""
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        console.print(f"ParSub v{__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def main_callback(
+    version: Optional[bool] = typer.Option(
+        None, "--version", "-V", help="Show the version and exit.", callback=_version_callback, is_eager=True
+    ),
+) -> None:
+    """ParSub - Agentic Math/Physics research tool."""
+
+
+def _print_analysis(result: AnalysisResult, source: str, verbose: bool) -> None:
+    summary = result.summary()
+    console.print("\n[green]Analysis complete![/green]")
+    console.print(f"  Input:                 {source}")
+    console.print(
+        f"  Expressions found:     {summary['expressions_found']} "
+        f"({summary['expressions_converted']} converted to SymPy)"
+    )
+    console.print(f"  Computation tasks:     {summary['tasks_generated']}")
+    console.print(f"  Generated code:        {result.code_path}")
+    console.print(f"  Analysis details:      {result.analysis_path}")
+    for warning in result.warnings:
+        console.print(f"[yellow]  Warning: {warning}[/yellow]")
+
+    if result.tasks:
+        table = Table(title="Computation tasks", show_lines=False)
+        table.add_column("#", justify="right")
+        table.add_column("Goal")
+        table.add_column("Description", overflow="fold")
+        for index, task in enumerate(result.tasks, 1):
+            description = task.get("description") or task.get("expression", "")
+            if not verbose and len(description) > 110:
+                description = description[:107] + "..."
+            table.add_row(str(index), task["goal_type"], description)
+        console.print(table)
+
+    if verbose:
+        console.print("\n[yellow]Extracted information[/yellow]")
+        console.print(f"  Goals:      {summary['goals'] or '-'}")
+        console.print(f"  Methods:    {summary['methods'] or '-'}")
+        names = [p["name"] for p in summary["parameters"][:10]]
+        console.print(f"  Parameters: {names or '-'}")
+
+
+def _run(code_file: str, output_dir: Optional[str], timeout: float, task_timeout: Optional[float]) -> int:
+    """Run a generated script, streaming its output. Returns the exit code."""
+    code_path = Path(code_file)
+    if not code_path.is_file():
+        console.print(f"[red]Error: Code file '{code_file}' not found.[/red]")
+        return 1
+    out_dir = os.path.abspath(output_dir) if output_dir else str(code_path.resolve().parent)
+    console.print(Panel.fit("Running ParSub generated code", style="green"))
+    try:
+        result = run_generated_code(
+            str(code_path), out_dir, timeout=timeout, capture_output=False, task_timeout=task_timeout
+        )
+    except subprocess.TimeoutExpired:
+        console.print(f"[red]Error: Code execution timed out ({timeout:g} s).[/red]")
+        return 1
+    except OSError as exc:
+        console.print(f"[red]Error running code: {exc}[/red]")
+        return 1
+
+    run_summary = read_run_summary(out_dir)
+    if result.returncode == 0:
+        console.print("[green]Success: all tasks completed.[/green]")
+    elif run_summary:
+        console.print(
+            f"[yellow]Finished with {run_summary.get('failed', '?')} failed task(s) "
+            f"and {run_summary.get('succeeded', '?')} successful task(s).[/yellow]"
+        )
+    else:
+        console.print("[red]Error: code execution failed.[/red]")
+    console.print(f"Results: {out_dir}")
+    return result.returncode
 
 
 @app.command()
 def analyze(
     latex_file: str = typer.Argument(..., help="Path to LaTeX source file"),
-    output_dir: str = typer.Option("./output", help="Output directory for generated code and results"),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output")
+    output_dir: str = typer.Option("./output", "--output-dir", "-o", help="Output directory for generated code and results"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
+    show_code: bool = typer.Option(False, "--show-code", help="Print the generated Python code"),
+    run_code: bool = typer.Option(False, "--run", help="Run the generated code immediately"),
+    timeout: float = typer.Option(600, "--timeout", help="Time limit in seconds when using --run"),
 ):
     """
-    Analyze LaTeX source file and generate Python code for numerical evaluation.
+    Analyze a LaTeX source file and generate Python code for numerical evaluation.
     """
-    console.print(Panel.fit("[microscope] ParSub - Agentic Math/Physics Research Tool", style="blue"))
+    console.print(Panel.fit("ParSub - Agentic Math/Physics Research Tool", style="blue"))
 
-    # Read LaTeX file
     try:
-        with open(latex_file, 'r', encoding='utf-8') as f:
-            latex_source = f.read()
+        with open(latex_file, "r", encoding="utf-8") as handle:
+            latex_source = handle.read()
     except FileNotFoundError:
         console.print(f"[red]Error: File '{latex_file}' not found.[/red]")
         raise typer.Exit(1)
-    except Exception as e:
-        console.print(f"[red]Error reading file: {e}[/red]")
+    except (OSError, UnicodeDecodeError) as exc:
+        console.print(f"[red]Error reading file: {exc}[/red]")
         raise typer.Exit(1)
 
     if verbose:
         console.print(f"[dim]Read {len(latex_source)} characters from {latex_file}[/dim]")
 
-    # Parse LaTeX
-    with Progress(
-        SpinnerColumn(spinner_name="dots", style="bold cyan"),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-        disable=True
-    ) as progress:
-        task1 = progress.add_task("Parsing LaTeX...", total=None)
-        parsed_result = parse_latex_source(latex_source)
-        progress.update(task1, description="✅ LaTeX parsed")
+    with console.status("Parsing LaTeX, analyzing expressions and generating code..."):
+        result = analyze_latex(latex_source, output_dir, source_name=os.path.basename(latex_file))
+    _print_analysis(result, latex_file, verbose)
 
-        task2 = progress.add_task("Analyzing expressions...", total=None)
-        analyzed_tasks = analyze_expressions(
-            parsed_result.get('expressions', []),
-            {
-                'goals': parsed_result.get('goals', []),
-                'methods': parsed_result.get('methods', []),
-                'parameters': parsed_result.get('parameters', [])
-            }
-        )
-        progress.update(task2, description="✅ Expressions analyzed")
+    if show_code:
+        code_content = Path(result.code_path).read_text(encoding="utf-8")
+        console.print(Panel(Syntax(code_content, "python", line_numbers=True), title="Generated Python Code"))
 
-        task3 = progress.add_task("Generating Python code...", total=None)
-        code_file = generate_code_from_tasks(analyzed_tasks, output_dir)
-        progress.update(task3, description="✅ Code generated")
-
-    # Display results
-    console.print("\n[green]Analysis Complete![/green]")
-    console.print(f"[file] Input file: {latex_file}")
-    console.print(f"[expressions] Expressions found: {len(parsed_result.get('expressions', []))}")
-    console.print(f"[tasks] Computation tasks: {len(analyzed_tasks)}")
-    console.print(f"[code] Generated code: {code_file}")
-    console.print(f"[folder] Output directory: {output_dir}")
-
-    if verbose:
-        console.print("\n[yellow]Extracted Information:[/yellow]")
-        if parsed_result.get('goals'):
-            console.print(f"  Goals: {parsed_result['goals']}")
-        if parsed_result.get('methods'):
-            console.print(f"  Methods: {parsed_result['methods']}")
-        if parsed_result.get('parameters'):
-            console.print(f"  Parameters: {[p['name'] for p in parsed_result['parameters'][:5]]}")
-
-        console.print("\n[yellow]Computation Tasks:[/yellow]")
-        for i, task in enumerate(analyzed_tasks, 1):
-            console.print(f"  {i}. {task['goal_type'].title()}: {task['expression'][:50]}...")
-
-    # Show generated code if requested
-    if verbose and typer.confirm("\nShow generated code?", default=False):
-        try:
-            with open(code_file, 'r') as f:
-                code_content = f.read()
-            syntax = Syntax(code_content, "python", theme="monokai", line_numbers=True)
-            console.print(Panel(syntax, title="Generated Python Code"))
-        except Exception as e:
-            console.print(f"[red]Could not display code: {e}[/red]")
+    if run_code:
+        code = _run(result.code_path, output_dir, timeout, None)
+        raise typer.Exit(code)
+    console.print(f"\nNext: parsub run {result.code_path}")
 
 
 @app.command()
 def run(
     code_file: str = typer.Argument(..., help="Path to generated Python code file"),
-    output_dir: str = typer.Option("./output", help="Directory where results will be saved")
+    output_dir: Optional[str] = typer.Option(
+        None, "--output-dir", "-o", help="Directory where results will be saved [default: the script's directory]"
+    ),
+    timeout: float = typer.Option(600, "--timeout", help="Overall time limit in seconds"),
+    task_timeout: Optional[float] = typer.Option(None, "--task-timeout", help="Time limit per task in seconds"),
 ):
     """
     Execute generated Python code to compute results and generate plots.
     """
-    console.print(Panel.fit("[rocket] Running ParSub Generated Code", style="green"))
-
-    code_path = Path(code_file)
-    if not code_path.exists():
-        console.print(f"[red]Error: Code file '{code_file}' not found.[/red]")
-        raise typer.Exit(1)
-
-    # Change to output directory and run the code
-    import subprocess
-    import os
-
-    try:
-        # Set output directory in environment
-        env = os.environ.copy()
-        env['PARSUB_OUTPUT_DIR'] = output_dir
-
-        # Run the code
-        result = subprocess.run(
-            [sys.executable, str(code_path)],
-            cwd=output_dir,
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=120  # 2 minute timeout
-        )
-
-        if result.returncode == 0:
-            console.print("[green]Success: Code executed successfully![/green]")
-            if result.stdout:
-                console.print("\n[blue]Output:[/blue]")
-                console.print(result.stdout)
-        else:
-            console.print("[red]Error: Code execution failed![/red]")
-            if result.stderr:
-                console.print("[red]Error output:[/red]")
-                console.print(result.stderr)
-            if result.stdout:
-                console.print("[blue]Standard output:[/blue]")
-                console.print(result.stdout)
-
-    except subprocess.TimeoutExpired:
-        console.print("[red]Error: Code execution timed out (2 minutes)[/red]")
-        raise typer.Exit(1)
-    except Exception as e:
-        console.print(f"[red]Error running code: {e}[/red]")
-        raise typer.Exit(1)
+    raise typer.Exit(_run(code_file, output_dir, timeout, task_timeout))
 
 
 @app.command()
-def demo():
-    """Run a demonstration with sample LaTeX input."""
-    console.print(Panel.fit("[demo] ParSub Demo", style="magenta"))
-
-    # Sample LaTeX expressions
-    sample_latex = r"""
-    \documentclass{article}
-    \begin{document}
-
-    We aim to compute the trajectory of a projectile under gravity.
-
-    The equation of motion is given by:
-    \begin{equation}
-    y = x \tan(\theta) - \frac{g x^2}{2 v_0^2 \cos^2(\theta)}
-    \end{equation}
-
-    where:
-    \begin{itemize}
-    \item $y$ is the height
-    \item $x$ is the horizontal distance
-    \item $\theta$ is the launch angle
-    \item $v_0$ is the initial velocity
-    \item $g$ is the gravitational acceleration ($9.81  m/s^2$)
-    \end{itemize}
-
-    We want to plot the trajectory for different angles and find the maximum range.
-
-    The range equation is:
-    \begin{equation}
-    R = \frac{v_0^2 \sin(2\theta)}{g}
-    \end{equation}
-
-    \end{document}
-    """
-
-    with Progress(
-        SpinnerColumn(spinner_name="dots", style="bold cyan"),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-        disable=True
-    ) as progress:
-        task1 = progress.add_task("Parsing sample LaTeX...", total=None)
-        parsed_result = parse_latex_source(sample_latex)
-        progress.update(task1, description="✅ LaTeX parsed")
-
-        task2 = progress.add_task("Analyzing expressions...", total=None)
-        analyzed_tasks = analyze_expressions(
-            parsed_result.get('expressions', []),
-            {
-                'goals': parsed_result.get('goals', []),
-                'methods': parsed_result.get('methods', []),
-                'parameters': parsed_result.get('parameters', [])
-            }
-        )
-        progress.update(task2, description="✅ Expressions analyzed")
-
-        task3 = progress.add_task("Generating demo code...", total=None)
-        demo_dir = "./demo_output"
-        code_file = generate_code_from_tasks(analyzed_tasks, demo_dir)
-        progress.update(task3, description="✅ Demo code generated")
-
-    console.print(f"\n[green]Demo completed![/green]")
-    console.print(f"[folder] Demo files saved to: {demo_dir}")
-    console.print(f"[file] Generated code: {code_file}")
-    console.print(f"\nTo run the demo:")
-    console.print(f"  parsub run {code_file} --output-dir {demo_dir}")
-
-    # Show what was detected
-    if parsed_result.get('goals'):
-        console.print(f"\n[yellow]Detected Goals:[/yellow] {parsed_result['goals']}")
-    if parsed_result.get('parameters'):
-        param_names = [p['name'] for p in parsed_result['parameters']]
-        console.print(f"[yellow]Detected Parameters:[/yellow] {param_names}")
+def demo(
+    output_dir: str = typer.Option("./demo_output", "--output-dir", "-o", help="Directory for the demo files"),
+    run_code: bool = typer.Option(False, "--run", help="Also run the generated code"),
+):
+    """Run a demonstration with a sample LaTeX document (projectile motion)."""
+    console.print(Panel.fit("ParSub Demo: projectile motion", style="magenta"))
+    with console.status("Analyzing the demo document..."):
+        result = analyze_latex(DEMO_LATEX, output_dir, source_name="demo: projectile motion")
+    _print_analysis(result, "built-in projectile motion example", verbose=True)
+    if run_code:
+        raise typer.Exit(_run(result.code_path, output_dir, 600, None))
+    console.print("\nTo run the demo:")
+    console.print(f"  parsub run {result.code_path}")
 
 
 @app.command()
 def version():
     """Show version information."""
-    console.print("ParSub v0.1.0")
+    console.print(f"ParSub v{__version__}")
     console.print("Agentic Math/Physics Research Tool")
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Console-script entry point."""
     app()
+
+
+if __name__ == "__main__":
+    main()

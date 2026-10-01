@@ -1,0 +1,27 @@
+\documentclass{article}
+\usepackage{amsmath}
+\begin{document}
+
+\section{Projectile motion}
+
+We aim to compute the trajectory of a projectile under gravity, where the
+gravitational acceleration is $g = 9.81$.
+
+The equation of motion is given by:
+\begin{equation}\label{eq:trajectory}
+y = x \tan(\theta) - \frac{g x^2}{2 v_0^2 \cos^2(\theta)}
+\end{equation}
+where $y$ is the height, $x$ the horizontal distance, $\theta$ the launch
+angle and $v_0$ the initial velocity.
+
+We want to find the maximum range. The range equation is:
+\begin{equation}\label{eq:range}
+R = \frac{v_0^2 \sin(2\theta)}{g}
+\end{equation}
+
+The time of flight is
+\begin{equation}\label{eq:time}
+T = \frac{2 v_0 \sin(\theta)}{g}.
+\end{equation}
+
+\end{document}

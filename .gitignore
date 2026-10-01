@@ -73,4 +73,9 @@ Thumbs.db
 .output/
 output/
 demo_output/
-*.log
+*.logtest_output/
+api_results/
+_site/
+.jekyll-cache/
+.sass-cache/
+Gemfile.lock

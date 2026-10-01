@@ -1,3 +1,5 @@
-from .main import app
+"""Command-line interface (``parsub`` command)."""
 
-main = app
+from .main import app, main
+
+__all__ = ["app", "main"]

@@ -1,44 +1,79 @@
 [build-system]
-requires = ["setuptools>=45", "wheel"]
+requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "ParSub"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Agentic Math/Physics research tool for LaTeX analysis and numerical evaluation"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
 authors = [
-    {name = "ParSub Developer SParida", email = "paridasubrat553@gmail.com"}
+    { name = "ParSub Developer SParida", email = "paridasubrat553@gmail.com" },
+]
+keywords = ["latex", "sympy", "mathematics", "physics", "research", "code-generation"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Scientific/Engineering :: Physics",
 ]
 dependencies = [
     "numpy>=1.24.0",
     "scipy>=1.10.0",
     "matplotlib>=3.7.0",
-    "plotly>=5.15.0",
     "sympy>=1.12",
-    "rich>=11.0.0",
-    "pylatexenc>=2.1",
+    "antlr4-python3-runtime==4.11.*",  # required by sympy.parsing.latex
+    "pylatexenc>=2.10,<3",
     "pandas>=2.0.0",
     "openpyxl>=3.1.0",
+    "rich>=12.0.0",
     "typer>=0.9.0",
     "fastapi>=0.100.0",
     "uvicorn>=0.23.0",
-    "python-dotenv>=1.0.0",
-    "pytest>=7.0.0"
+    "python-multipart>=0.0.6",  # file uploads in the REST API
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "httpx>=0.24.0",  # FastAPI TestClient
+]
+
 [project.urls]
 Homepage = "https://github.com/PSubrat29/parsub"
-Documentation = "https://github.com/PSubrat29/parsub#readme"
+Website = "https://psubrat29.github.io/parsub/"
+Documentation = "https://github.com/PSubrat29/parsub/tree/master/docs"
 Repository = "https://github.com/PSubrat29/parsub"
+Issues = "https://github.com/PSubrat29/parsub/issues"
 
 [project.scripts]
 parsub = "parsub.cli:main"
+parsub-api = "parsub.api.main:run"
+
+[tool.setuptools.dynamic]
+version = { attr = "parsub.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.black]
-line-length = 88
-target-version = ['py38']
+line-length = 120
+target-version = ["py39"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
