@@ -6,58 +6,58 @@
 3. [Python API](#python-api)
 4. [REST API](#rest-api)
 5. [Understanding the Workflow](#understanding-the-workflow)
-6. [Advanced Usage](#advanced-usage)
-7. [Troubleshooting](#troubleshooting)
+6. [The Generated Script](#the-generated-script)
+7. [Advanced Usage](#advanced-usage)
+8. [Troubleshooting](#troubleshooting)
 
 ## Getting Started
 
 ### Installation
 
-ParSub requires Python 3.8 or higher.
+ParSub requires Python 3.9 or higher.
 
 ```bash
-# Install from source
-git clone https://github.com/yourusername/parsub.git
+git clone https://github.com/PSubrat29/parsub.git
 cd parsub
 pip install -e .
 
-# Verify installation
+# Verify the installation
 parsub --version
-# Should output: ParSub v0.1.0
+# ParSub v0.1.0
 ```
 
 ### Basic Concepts
 
-ParSub works in four stages:
-1. **Input**: LaTeX source code (file or string)
-2. **Parsing**: Extract mathematical expressions and metadata
-3. **Analysis**: Determine what computations to perform
-4. **Output**: Generate executable Python code and run it to produce results
+ParSub works in five stages:
+1. **Input**: LaTeX source code (a file or a string)
+2. **Parsing**: extract the mathematical expressions and the prose around them
+3. **Analysis**: decide what to compute for every expression
+4. **Code generation**: write a self-contained Python script
+5. **Execution**: run the script to produce plots and data
 
 ## Command Line Interface
-
-ParSub provides a rich CLI built with Typer and Rich.
-
-### Main Commands
 
 ```bash
 parsub --help
 ```
 
-#### analyze
+### analyze
 
 Analyze LaTeX source and generate Python code:
 
-```bash
-parsub analyze INPUT_FILE [OPTIONS]
+```
+parsub analyze LATEX_FILE [OPTIONS]
 
 Arguments:
-  INPUT_FILE  Path to LaTeX source file  [required]
+  LATEX_FILE  Path to LaTeX source file  [required]
 
 Options:
-  -o, --output-dir DIRECTORY  Output directory  [default: ./output]
-  -v, --verbose               Verbose output
-  --help                      Show this message and exit
+  -o, --output-dir TEXT  Output directory for generated code and results  [default: ./output]
+  -v, --verbose          Verbose output
+  --show-code            Print the generated Python code
+  --run                  Run the generated code immediately
+  --timeout FLOAT        Time limit in seconds when using --run  [default: 600]
+  --help                 Show this message and exit.
 ```
 
 Example:
@@ -65,65 +65,70 @@ Example:
 parsub analyze paper.tex --output-dir ./results --verbose
 ```
 
-#### run
+The command prints a table of the computation tasks and writes
+`generated_computation.py` and `analysis.json` to the output directory.
+
+### run
 
 Execute generated Python code:
 
-```bash
+```
 parsub run CODE_FILE [OPTIONS]
 
 Arguments:
   CODE_FILE  Path to generated Python code file  [required]
 
 Options:
-  -o, --output-dir DIRECTORY  Output directory  [default: ./output]
-  --help                      Show this message and exit
+  -o, --output-dir TEXT  Directory where results will be saved [default: the script's directory]
+  --timeout FLOAT        Overall time limit in seconds  [default: 600]
+  --task-timeout FLOAT   Time limit per task in seconds
+  --help                 Show this message and exit.
 ```
 
 Example:
 ```bash
-parsub run ./results/generated_computation.py --output-dir ./results
+parsub run ./results/generated_computation.py
 ```
 
-#### demo
+The exit code is 0 when every task succeeded and 1 otherwise.
 
-Run a built-in demonstration:
+### demo
+
+Run the built-in projectile-motion demonstration:
 
 ```bash
-parsub demo
+parsub demo            # analyze only, writes ./demo_output
+parsub demo --run      # analyze and run
 ```
 
-#### version
-
-Show version information:
+### version
 
 ```bash
 parsub version
+parsub --version
 ```
+
+`python -m parsub ...` works as an alternative to the `parsub` command.
 
 ### CLI Examples
 
-#### Simple Expression Analysis
+#### Simple expression
 
-Given a file `physics.tex` containing:
+Given `physics.tex` containing:
 ```latex
 The kinetic energy is given by $E = \frac{1}{2}mv^2$
 ```
 
-Run:
 ```bash
-parsub analyze physics.tex
+parsub analyze physics.tex --run
 ```
 
-This will:
-1. Extract the expression $E = \frac{1}{2}mv^2$
-2. Identify that we likely want to evaluate it
-3. Generate Python code to compute kinetic energy for various mass and velocity values
-4. Save the code to `./output/generated_computation.py`
+ParSub recognises `E = ...` as a definition, and because the right-hand side has two
+variables (`m`, `v`) it draws a surface plot of the kinetic energy over both.
 
-#### Complex Analysis with Plotting
+#### Plotting a wave
 
-Given a file `wave.tex` containing:
+Given `wave.tex` containing:
 ```latex
 We want to plot the wave function:
 \begin{equation}
@@ -131,123 +136,113 @@ We want to plot the wave function:
 \end{equation}
 ```
 
-Run:
 ```bash
-parsub analyze wave.tex --output-dir ./wave_results
-parsub run ./wave_results/generated_computation.py --output-dir ./wave_results
+parsub analyze wave.tex --output-dir ./wave_results --run
 ```
 
-This will generate plots of the wave function for different values of x and t.
+The plot sweeps `x` and holds `t`, `A`, `k` and `omega` at default values that are
+listed in the task description (and can be edited in the generated script).
 
 ## Python API
 
-ParSub can be used programmatically through its Python API.
+### One-step analysis
 
-### Basic Usage
+```python
+import parsub
+
+result = parsub.analyze_latex(latex_source, output_dir="./output", source_name="paper.tex")
+print(result.code_path)        # ./output/generated_computation.py
+print(result.analysis_path)    # ./output/analysis.json
+print(result.summary())        # counts, goals, methods, parameters, warnings
+for task in result.tasks:
+    print(task["goal_type"], task["description"])
+
+process = parsub.run_generated_code(result.code_path)   # subprocess.CompletedProcess
+print(process.returncode, process.stdout)
+
+# From a file: returns the path of the generated script
+code_file = parsub.analyze_latex_file("paper.tex", "./output")
+```
+
+### Stage by stage
 
 ```python
 from parsub.parser.latex_parser import parse_latex_source
 from parsub.analyzer.expression_analyzer import analyze_expressions
 from parsub.generator.code_generator import generate_code_from_tasks
 
-# Step 1: Read LaTeX source
-with open("document.tex", "r") as f:
+with open("document.tex", encoding="utf-8") as f:
     latex_source = f.read()
 
-# Step 2: Parse LaTeX
-parsed_result = parse_latex_source(latex_source)
-
-# Step 3: Analyze expressions
+parsed = parse_latex_source(latex_source)
 tasks = analyze_expressions(
-    parsed_result.get('expressions', []),
+    parsed["expressions"],
     {
-        'goals': parsed_result.get('goals', []),
-        'methods': parsed_result.get('methods', []),
-        'parameters': parsed_result.get('parameters', [])
-    }
+        "goals": parsed["goals"],
+        "methods": parsed["methods"],
+        "parameters": parsed["parameters"],
+        "assignments": parsed["assignments"],
+    },
 )
-
-# Step 4: Generate code
-output_dir = "./my_output"
-code_file = generate_code_from_tasks(tasks, output_dir)
-
-print(f"Analysis complete! Generated code saved to: {code_file}")
+code_file = generate_code_from_tasks(tasks, "./my_output")
 ```
 
-### Direct Function Access
+### Customizing the analysis
 
-You can also use the high-level convenience functions:
-
-```python
-from parsub import analyze_latex_file
-
-# One-step analysis and code generation
-code_file = analyze_latex_file("paper.tex", "./output")
-```
-
-### Customizing Analysis
-
-You can override the automatic goal detection by providing explicit context:
+The goal detection can be steered with your own context, or overridden per
+expression with a `goal_type` key:
 
 ```python
 from parsub.parser.latex_parser import LaTeXParser
 from parsub.analyzer.expression_analyzer import ExpressionAnalyzer
 from parsub.generator.code_generator import CodeGenerator
 
-parser = LaTeXParser()
-analyzer = ExpressionAnalyzer()
-generator = CodeGenerator("./custom_output")
+parsed = LaTeXParser().parse(latex_source)
 
-# Parse
-result = parser.parse(latex_source)
-
-# Provide explicit goals/methods if auto-detection isn't sufficient
 custom_context = {
-    'goals': ['we want to plot this function', 'find the maximum value'],
-    'methods': ['using numerical sampling', 'applying optimization techniques'],
-    'parameters': []  # Will be auto-extracted from expressions
+    "goals": ["we want to plot this function", "find the maximum value"],
+    "methods": [],
+    "assignments": {"g": 9.81},          # values for parameters held fixed
 }
+analyzer = ExpressionAnalyzer()
+tasks = [task.to_dict() for task in analyzer.analyze_expressions(parsed["expressions"], custom_context)]
 
-# Analyze with custom context
-tasks = analyzer.analyze_expressions(
-    result.get('expressions', []),
-    custom_context
-)
+# Force a goal for one expression
+parsed["expressions"][0]["goal_type"] = "optimize"
 
-# Generate code
-code_file = generator.generate_evaluation_code(tasks)
+generator = CodeGenerator("./custom_output")
+code = generator.generate_evaluation_code(tasks)      # the script as a string
+path = generator.save_code(code)                      # ./custom_output/generated_computation.py
 ```
 
 ## REST API
 
-ParSub includes a FastAPI-based REST API for integration with web applications.
-
-### Starting the API Server
+### Starting the server
 
 ```bash
-# Method 1: Using the CLI command
+# Method 1: console script (127.0.0.1:8000; PARSUB_API_HOST / PARSUB_API_PORT override)
 parsub-api
 
-# Method 2: Using uvicorn directly
+# Method 2: uvicorn directly
 uvicorn parsub.api.main:app --host 0.0.0.0 --port 8000
 
-# Method 3: For development with auto-reload
-uvicorn parsub.api.main:app --host 0.0.0.0 --port 8000 --reload
+# Method 3: development with auto-reload
+uvicorn parsub.api.main:app --reload
 ```
 
-The API will be available at `http://localhost:8000`
+Open `http://localhost:8000/` in a browser for the interactive documentation.
 
-### API Endpoints
+All files are kept inside an **output root** (`PARSUB_OUTPUT_ROOT`, default `./output`
+relative to the server's working directory). `output_dir` values in requests are
+sub-directories of that root, and all returned paths are relative to it.
 
-#### POST /analyze
+### POST /analyze
 
-Analyze LaTeX source and generate code.
-
-**Request Body:**
+**Request body:**
 ```json
 {
-  "latex_source": "\\\\begin{equation} E = mc^2 \\\\end{equation}",
-  "output_dir": "./api_results"
+  "latex_source": "\\begin{equation} E = mc^2 \\end{equation}",
+  "output_dir": "api_results"
 }
 ```
 
@@ -258,199 +253,240 @@ Analyze LaTeX source and generate code.
   "message": "Analysis completed successfully",
   "expressions_found": 1,
   "tasks_generated": 1,
-  "generated_code_path": "./api_results/generated_computation.py",
+  "output_dir": "api_results",
+  "generated_code_path": "api_results/generated_computation.py",
+  "analysis_path": "api_results/analysis.json",
   "extracted_info": {
-    "goals": ["we aim to compute energy"],
-    "methods": ["using mass-energy equivalence"],
+    "goals": [],
+    "methods": [],
     "parameters": [
-      {"name": "E", "frequency": 1, "type": "unknown", "suggested_range": {"min": -5, "max": 5}},
-      {"name": "m", "frequency": 1, "type": "unknown", "suggested_range": {"min": -5, "max": 5}},
-      {"name": "c", "frequency": 1, "type": "constant", "suggested_range": {"min": -5, "max": 5}}
-    ]
-  }
+      {"name": "E", "frequency": 1, "type": "unknown", "suggested_range": {"min": -5.0, "max": 5.0}, "default": 1.0},
+      {"name": "c", "frequency": 1, "type": "constant", "suggested_range": {"min": -5.0, "max": 5.0}, "default": 1.0},
+      {"name": "m", "frequency": 1, "type": "constant", "suggested_range": {"min": 0.1, "max": 10.0}, "default": 1.0}
+    ],
+    "expressions": [{"latex": "E = mc^2", "sympy": "Eq(E, c**2*m)", "kind": "equation", "label": null}],
+    "tasks": [{"goal_type": "plot", "description": "Plot E = c**2*m for c in [-5, 5], m in [0.1, 10]"}]
+  },
+  "warnings": []
 }
 ```
 
-#### POST /upload
+### POST /upload
 
-Upload and analyze a LaTeX file.
+Multipart form with `file` (a `.tex`, `.latex` or `.ltx` file, UTF-8, at most 5 MB)
+and an optional `output_dir` field. The response has the same format as `/analyze`.
 
-**Form Data:**
-- `file`: LaTeX file (.tex, .latex, .ltx)
-- `output_dir`: Optional output directory (default: "./output")
+```bash
+curl -F "file=@paper.tex" -F "output_dir=paper" http://localhost:8000/upload
+```
 
-**Response:** Same format as `/analyze`
+### POST /run
 
-#### GET /execute/{code_path}
+Runs a script generated by ParSub inside the output root and lists the files it produced.
 
-Execute previously generated code (returns instructions for security reasons).
+```json
+{"code_path": "api_results/generated_computation.py", "timeout": 600}
+```
 
-**Response:**
 ```json
 {
-  "message": "Code execution initiated. Check output directory for results.",
-  "code_path": "./output/generated_computation.py",
-  "instructions": "Run: python ./output/generated_computation.py --output-dir ./output"
+  "success": true,
+  "message": "All tasks completed",
+  "output_files": ["api_results/plots/task_1_surface_plot.png", "api_results/data/task_1_surface_data.csv",
+                   "api_results/data/summary.json"],
+  "tasks_succeeded": 1,
+  "tasks_failed": 0,
+  "stdout": "...",
+  "stderr": ""
 }
 ```
 
-#### GET /download/{file_path}
+### GET /execute/{code_path}
 
-Download generated files (plots, data, etc.).
+Returns the shell command that runs a generated script locally (it does not run it).
 
-**Example:** `GET /download/output/plots/task_1_plot.png`
+### GET /download/{file_path}
 
-#### GET /health
+Downloads a generated file, e.g. `GET /download/api_results/plots/task_1_surface_plot.png`.
 
-Health check endpoint.
+### GET /health
 
-**Response:**
 ```json
-{
-  "status": "healthy",
-  "service": "ParSub API"
-}
+{"status": "healthy", "service": "ParSub API", "version": "0.1.0"}
 ```
 
-### API Security Notes
+### Status codes
 
-- All file paths are restricted to the output directory for security
-- Generated code execution returns instructions rather than executing directly (to prevent arbitrary code execution)
-- In production, use a proper job queue (like Celery) for code execution instead of the simple endpoint provided
+| Code | Meaning |
+|------|---------|
+| 400 | Invalid input (wrong file type, not a ParSub script, bad encoding) |
+| 403 | Path outside the output root |
+| 404 | File not found |
+| 413 | Upload too large |
+| 422 | Request body does not match the schema |
+| 504 | `/run` exceeded its time limit |
+
+### API security notes
+
+- Every path is resolved inside the output root; absolute paths and `..` escapes are rejected.
+- `/run` only executes `.py` files whose header shows they were generated by ParSub.
+- Running generated code costs CPU time; expose the API only to trusted users or put it
+  behind authentication.
 
 ## Understanding the Workflow
 
-### Stage 1: LaTeX Parsing
+### Stage 1: LaTeX parsing
 
-ParSub uses LaTeXWalker to parse LaTeX source and identify:
-- Mathematical expressions in `$...$`, `$$...$$`, `\[...\]`, and environments like `equation`, `align`, etc.
-- Text content for goal and method detection
-- Mathematical macros and structures
+ParSub walks the document with pylatexenc and collects:
+- inline math (`$...$`, `\(...\)`) and display math (`$$...$$`, `\[...\]`, `equation`,
+  `align`, `gather`, `multline`, `flalign`, `alignat`, `eqnarray`, `displaymath`, `dmath`,
+  and their starred forms); `align`-like environments are split at `\\`
+- equation labels (`\label{...}`) and the prose preceding each formula
+- side conditions such as `\,\,\, (\Re(z) > 0)` or `\quad x \geq 1`, turned into range
+  constraints
 
-### Stage 2: Goal and Context Analysis
+The preamble, comments, bibliography and references are ignored. Inline mentions such as
+`$x$` or `$\Gamma(z)$` and inequalities are not treated as computations, while statements
+such as `$g = 9.81$` are remembered as parameter values.
 
-The analyzer examines:
-- **Explicit goals**: Phrases like "we aim to", "the goal is to", "we want to"
-- **Methods**: Phrases like "we use", "by applying", "using"
-- **Mathematical context**: Structure of expressions to infer intent
-  - Equations (`=`) → likely solving
-  - Expressions with trigonometric functions → likely plotting
-  - Expressions with `max`/`min` → likely optimization
-  - Integral/differential symbols → likely integration/differentiation
+Each formula is converted with SymPy's LaTeX parser in strict mode, so a formula is either
+converted completely or reported as not converted (`sympy_expr = None`) — it is never
+silently truncated.
 
-### Stage 3: Parameter Inference
+### Stage 2: Goal and context analysis
 
-For each expression, ParSub identifies:
-- **Variables**: Symbols that appear to be inputs (x, y, z, t, theta, etc.)
-- **Constants**: Fixed values or parameters (m, g, c, h, etc.)
-- **Parameter types**: Inferred from variable names and context
-- **Suggested ranges**: Reasonable defaults based on parameter names
+For each expression the analyzer chooses a goal:
 
-### Stage 4: Code Generation
+| Goal | Chosen when | Output |
+|------|-------------|--------|
+| `evaluate` | "compute", "calculate", ... or 3+ variables | value at a point and a sweep (CSV + plot) |
+| `plot` | "plot", "graph", ... or 1–2 variables | line or surface plot + data |
+| `solve` | "solve", "roots", "zeros", or a plain equation | symbolic and numeric roots + plot |
+| `optimize` | "maximum", "minimize", "optimal", ... | minimum and/or maximum + plot |
+| `integrate` | "integral", "integrate" or an integral in the formula | antiderivative, definite integral or integral values |
+| `differentiate` | "derivative" or a derivative in the formula | partial derivatives + plot of f and f' |
+| `series` | "Taylor", "expansion", "approximation" | series expansion + comparison plot |
+| `verify` | an identity between special functions, integrals or sums | numerical check of both sides |
+| `symbolic` | the formula uses functions ParSub cannot evaluate | symbolic record (JSON) |
 
-The generator creates Python code that:
-- Uses SymPy for symbolic manipulation when beneficial
-- Uses NumPy for fast numerical computations
-- Uses Matplotlib for publication-quality plotting
-- Saves all outputs to organized directories
-- Includes error handling and logging
+Keywords in the sentences just before a formula count twice as much as the document-wide
+goals and methods. Definitions such as `y = f(x)` or `B(\zeta, \eta) = ...` compute the
+right-hand side and use the left-hand side as the label.
+
+### Stage 3: Parameter inference
+
+- **Independent variables** (swept) are chosen by name: `x`, `t`, `z`, `r`, `theta`, ...
+  come before parameters such as `g`, `m`, `alpha`; values stated in the document are never swept
+  unless nothing else can be.
+- **Fixed parameters** get the value stated in the document or a typical default
+  (`g = 9.81`, `theta = pi/4`, generic constants `= 1`, ...).
+- **Ranges** come from the variable name (e.g. `t` in [0, 10], `theta` in [0, 2π]) and
+  are tightened by side conditions.
+
+### Stage 4: Code generation
+
+The generated script contains the ParSub runtime helpers followed by one small function per
+task, so it runs without ParSub installed and is easy to edit.
+
+### Stage 5: Execution
+
+Every task runs in isolation with a time limit. Results and failures are recorded in
+`data/summary.json`; one failing task never stops the others.
+
+## The Generated Script
+
+```bash
+python generated_computation.py                    # all tasks, results next to the script
+python generated_computation.py --output-dir out   # write somewhere else
+python generated_computation.py --tasks 1,3        # only some tasks
+python generated_computation.py --timeout 300      # per-task time limit (seconds, 0 = none)
+```
+
+The output directory can also be set with the `PARSUB_OUTPUT_DIR` environment variable.
+A task looks like this:
+
+```python
+def task_2(ctx):
+    """Find extrema of R = v_0**2*sin(2*theta)/g for theta in [0, 6.28318] with v_0=10, g=9.81"""
+    expr = parse_sympy("Mul(Pow(Symbol('g'), Integer(-1)), Pow(Symbol('v_0'), Integer(2)), sin(Mul(Integer(2), Symbol('theta'))))")
+    return optimize_task(
+        ctx, 2, expr, independent=['theta'],
+        fixed={'v_0': 10.0, 'g': 9.81},
+        ranges={'theta': (0.0, 6.283185), 'v_0': (0.0, 20.0), 'g': (9.0, 10.0)},
+        direction='maximize', points=1000,
+    )
+```
+
+Change `fixed`, `ranges` or `points` and re-run the script to explore other values.
 
 ## Advanced Usage
 
-### Custom Output Formats
+### Output formats
 
-ParSub supports multiple output formats for data:
-- CSV (`.csv`)
-- TSV (`.tsv`)
-- Excel (`.xlsx`, `.xls`)
+`save_data(data, filename, ctx=ctx)` chooses the format from the extension:
+CSV (`.csv`), TSV (`.tsv`), Excel (`.xlsx`) or JSON (`.json`). Change the file names in the
+generated script to switch formats.
 
-The format is determined by the file extension in the `save_data` function calls within the generated code.
+### High-resolution output
 
-### High-Resolution Output
-
-All plots are generated at 300 DPI by default, suitable for publication. To change this:
-
-In the generated code, modify:
+Plots are saved at 300 DPI. To change this, edit in the generated script:
 ```python
-plt.rcParams['figure.dpi'] = 300
-plt.rcParams['savefig.dpi'] = 300
+plt.rcParams["savefig.dpi"] = 300
 ```
 
-### Parameter Sweeps
+### Expressions NumPy cannot evaluate
 
-For multi-parameter studies, ParSub automatically:
-- Creates parameter grids using NumPy's `linspace` and `meshgrid`
-- Evaluates expressions across the parameter space
-- Saves results in structured formats
-
-### Handling Complex Expressions
-
-ParSub can handle:
-- Multi-dimensional arrays and tensors (conceptually)
-- Special functions (via SymPy and NumPy)
-- Piecewise definitions
-- Recursive relations (iterative solutions in generated code)
+Integrals, infinite sums and products are evaluated point by point with SymPy/mpmath; sampling
+is automatically reduced (at most 120 points per curve, 25×25 per surface) to keep run times
+reasonable. Results that are not real numbers are stored as empty cells (NaN).
 
 ### Extending ParSub
 
-To add new analysis capabilities:
-
-1. **Add new goal types** in `ExpressionAnalyzer._determine_goal_type()`
-2. **Add new code generation templates** in `CodeGenerator` methods
-3. **Enhance parameter inference** in `LaTeXParser._infer_parameter_type()` and `_infer_parameter_range()`
-4. **Add new LaTeX construct handling** in the parser if needed
+1. **Add a goal type**: add keywords to `GOAL_KEYWORDS` in
+   `parsub/analyzer/expression_analyzer.py`, a `*_task` function in
+   `parsub/generator/runtime.py` and a branch in `CodeGenerator._generate_task_code`.
+2. **Improve parameter inference**: extend `PARAMETER_HINTS` in `parsub/core/parameters.py`.
+3. **Support more LaTeX**: extend the clean-up in `parsub/parser/latex_to_sympy.py`.
 
 ## Troubleshooting
 
-### Common Issues
+### "No mathematical expressions were found in the input"
+- Make sure formulas are in math mode (`$...$`, `\[...\]`, `equation`, ...).
+- Inline symbols such as `$x$` on their own are intentionally ignored.
 
-#### "No expressions found"
-- Ensure your LaTeX contains mathematical content in math mode (`$...$`, `\[...\]`, etc.)
-- Check that you're using standard LaTeX math environments
-- Try simplifying your LaTeX to isolate the issue
+### An expression is listed but not converted
+- `analysis.json` lists every expression with `"kind": null` when SymPy could not read it.
+  Typical causes: `\dots`, hypergeometric notation such as `{}_1F_1`, custom macros or
+  text inside formulas. Rewriting the formula in plain notation usually helps.
 
-#### Generated code fails to run
-- Check that all dependencies are installed: `numpy`, `scipy`, `matplotlib`, `sympy`, `pandas`
-- Ensure you're running the code in the correct environment
-- Look for syntax errors in the generated code (rare, but possible with complex LaTeX)
+### A task failed
+- `data/summary.json` contains the error message and traceback of every task.
+- Run a single task with `python generated_computation.py --tasks N`.
+- Increase the per-task time limit with `--timeout`.
 
-#### Plots not appearing
-- Check the `./output/plots/` directory for generated PNG files
-- Verify that matplotlib can display plots in your environment (may need backend configuration)
-- For headless servers, the Agg backend is used automatically
-
-#### Memory issues with large parameter sweeps
-- Reduce the number of points in the sampling (look for `points:` in generated code)
-- Consider reducing the parameter ranges
-- Use more efficient algorithms for your specific use case
-
-### Getting Help
-
-1. Check the [FAQ](#faq) below
-2. Search existing issues on GitHub
-3. Open a new issue with detailed information
-4. For urgent matters, contact the maintainers
+### Plots look empty
+- The function may not be real-valued in the chosen range (e.g. `sqrt(x)` for `x < 0`);
+  adjust `ranges` in the generated script.
 
 ### FAQ
 
-**Q: Do I need to install LaTeX to use ParSub?**
-A: No! ParSub only needs to read LaTeX as text. It does not compile LaTeX documents.
+**Q: Do I need to install LaTeX?**
+A: No. ParSub reads LaTeX as text; it never compiles documents.
 
-**Q: Can ParSub handle my specific LaTeX package or macro?**
-A: ParSub handles standard LaTeX math constructs. For custom macros, it will treat them as unknown symbols, which may still work depending on how they're used.
+**Q: Can ParSub handle my custom macros?**
+A: Standard math is supported. Unknown macros usually make a formula unconvertible; it is then
+reported rather than computed incorrectly.
 
-**Q: Is my data safe with ParSub?**
-A: Yes. All processing happens locally. No data is sent to external servers unless you explicitly choose to do so.
+**Q: Is my data safe?**
+A: Yes. Everything runs locally.
 
 **Q: Can I use ParSub in a Jupyter notebook?**
-A: Yes! You can use the Python API within notebook cells, or execute the generated code and display the results.
+A: Yes. Use the Python API, then display the PNG files from the `plots` directory.
 
-**Q: How does ParSub compare to other tools like Mathematica or Maple?**
-A: ParSub is focused on the specific workflow of extracting computations from LaTeX and generating Python code. It's not a full computer algebra system, but leverages the excellent Python scientific stack.
-
-**Q: Can I contribute LaTeX macros or domain-specific knowledge to ParSub?**
-A: Absolutely! We welcome contributions that improve ParSub's understanding of specific domains (physics, engineering, finance, etc.).
+**Q: How does ParSub compare to Mathematica or Maple?**
+A: ParSub focuses on extracting computations from LaTeX and generating Python code; it relies on
+the scientific Python stack rather than being a computer algebra system itself.
 
 ---
 
-*Happy researching with ParSub! If you find this tool useful, please consider starring the repository and sharing it with colleagues.*
+*Happy researching with ParSub!*

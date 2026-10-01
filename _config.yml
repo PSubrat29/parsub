@@ -1,0 +1,35 @@
+# GitHub Pages (Jekyll) configuration for the ParSub website.
+# README.md is the home page; the Markdown files in docs/ are the documentation pages.
+title: ParSub
+description: Turn the mathematics in LaTeX documents into runnable Python computations, plots and data.
+theme: jekyll-theme-cayman
+
+plugins:
+  - jekyll-relative-links
+  - jekyll-optional-front-matter
+  - jekyll-readme-index
+  - jekyll-titles-from-headings
+  - jekyll-default-layout
+  - jekyll-seo-tag
+
+relative_links:
+  enabled: true
+  collections: false
+
+markdown: kramdown
+kramdown:
+  input: GFM
+
+exclude:
+  - src/
+  - tests/
+  - pyproject.toml
+  - Gemfile
+  - Gemfile.lock
+  - "*.egg-info"
+  - output/
+  - demo_output/
+  - build/
+  - dist/
+  - venv/
+  - .venv/

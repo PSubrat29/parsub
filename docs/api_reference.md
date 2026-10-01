@@ -1,31 +1,52 @@
 # ParSub API Reference
 
-## Overview
-
-This document describes the public API of ParSub, organized by module.
+This document describes the public Python API of ParSub, organized by module.
+For the command line and the REST API see the [User Guide](user_guide.md).
 
 ## Main Package
 
 ### `parsub`
 
-Top-level package providing convenience functions.
+#### `__version__`
+The package version string, e.g. `"0.1.0"` (also shown by `parsub --version`).
 
-#### `analyze_latex_file(latex_file: str, output_dir: str = "./output") -> str`
-Convenience function that performs complete analysis and code generation from a LaTeX file.
+#### `analyze_latex(latex_source, output_dir="./output", source_name=None) -> AnalysisResult`
+Parse, analyze and generate code for a LaTeX string. Writes `generated_computation.py` and
+`analysis.json` into `output_dir`. See [`AnalysisResult`](#analysisresult).
 
-**Args:**
-- `latex_file`: Path to LaTeX source file
-- `output_dir`: Directory for generated code and outputs
+#### `analyze_latex_file(latex_file, output_dir="./output") -> str`
+Same for a file; returns the path of the generated Python script.
 
-**Returns:**
-- Path to generated Python code file
-
-**Example:**
 ```python
 from parsub import analyze_latex_file
 
 code_file = analyze_latex_file("paper.tex", "./results")
 ```
+
+#### `run_generated_code(code_path, output_dir=None, timeout=600, capture_output=True) -> subprocess.CompletedProcess`
+Run a generated script in a separate Python process. Results are written to `output_dir`
+(default: the script's directory). Raises `FileNotFoundError` for a missing script and
+`subprocess.TimeoutExpired` when `timeout` seconds are exceeded.
+
+## Pipeline Module
+
+### `parsub.core.pipeline`
+
+#### `AnalysisResult`
+Returned by `analyze_latex`:
+- `parsed`: the parser result (see `parse_latex_source`)
+- `tasks`: list of task dictionaries (see `analyze_expressions`)
+- `code_path`, `analysis_path`, `output_dir`: paths of the written files
+- `warnings`: list of messages (e.g. no expressions found)
+- `expressions`: shortcut for `parsed["expressions"]`
+- `summary()`: JSON-friendly overview (counts, goals, methods, parameters, paths, warnings)
+
+#### `analyze_latex(...)`, `analyze_latex_file(...)`, `run_generated_code(..., task_timeout=None)`
+The implementations behind the top-level functions. `task_timeout` sets the per-task time limit
+of the generated script.
+
+#### `read_run_summary(output_dir) -> dict | None`
+Load `data/summary.json` written by a generated script.
 
 ## Parser Module
 
@@ -34,241 +55,196 @@ code_file = analyze_latex_file("paper.tex", "./results")
 #### `parse_latex_source(latex_source: str) -> Dict[str, Any]`
 Parse LaTeX source and extract mathematical expressions and metadata.
 
-**Args:**
-- `latex_source`: Raw LaTeX source code
+**Returns** a dictionary containing:
+- `expressions`: list of expression dictionaries (below)
+- `goals`: research goals found in the prose ("we aim to ...", "the goal is to ...")
+- `methods`: methods found in the prose ("we use ...", "by applying ...")
+- `parameters`: every free symbol with `name`, `frequency`, `type`, `suggested_range` and `default`
+- `assignments`: values stated in the document, e.g. `{"g": 9.81}`
+- `raw_latex`: the original input
+- `text`: the prose with formulas replaced by placeholders
+- `statistics`: `math_segments`, `expressions`, `converted`
+- `parse_error`: only present if parsing failed
 
-**Returns:**
-Dictionary containing:
-- `expressions`: List of parsed mathematical expressions
-- `goals`: List of detected research goals
-- `methods`: List of detected methods
-- `parameters`: List of inferred parameters
-- `raw_latex`: Original input
-- `parse_error`: Error message if parsing failed (optional)
-
-**Expression Dictionary Format:**
-Each expression contains:
-- `raw_latex`: Original LaTeX string
-- `sympy_expr`: SymPy expression object (if conversion successful)
-- `variables`: List of variable names
-- `constants`: List of constant names
-- `description`: Textual description (if available)
+**Expression dictionary:**
+- `raw_latex`: the formula as written
+- `latex`: the cleaned formula that was converted
+- `sympy_expr`: SymPy object (`sympy.Eq` for equations) or `None` if it could not be converted
+- `sympy_str`: `str(sympy_expr)` or `None`
+- `kind`: `"equation"`, `"expression"`, `"assignment"` or `None`
+- `variables`: names of the free symbols
+- `constants`: numeric constants used (`pi`, `E`, `I`)
+- `display`: `True` for display math
+- `environment`: `"inline"`, `"display"` or the environment name (`"equation"`, `"align*"`, ...)
+- `label`: the `\label{...}` of the equation, if any
+- `context`: prose preceding the formula
+- `conditions` / `constraints`: side conditions and the bounds derived from them,
+  e.g. `{"z": {"min": 0.0}}`
+- `description`: reserved for a textual description (currently `None`)
 
 **Example:**
 ```python
 from parsub.parser.latex_parser import parse_latex_source
 
 result = parse_latex_source("$E = mc^2$")
-print(result['expressions'][0]['sympy_expr'])  # E - c**2*m
+print(result["expressions"][0]["sympy_expr"])  # Eq(E, c**2*m)
 ```
 
 #### `LaTeXParser`
-Main parser class with more granular control.
+Parser class. `LaTeXParser(context_chars=400).parse(latex_source)` returns the same dictionary as
+`parse_latex_source`.
 
-##### `__init__()`
-Initialize a new LaTeXParser instance.
+#### `MathExpression`
+Dataclass behind the expression dictionaries (`to_dict()` produces them).
 
-##### `parse(latex_source: str) -> Dict[str, Any]`
-Same as `parse_latex_source` function.
+### `parsub.parser.latex_to_sympy`
 
-### Expression Analysis Module
+Helpers used by the parser:
+- `latex_to_sympy(latex) -> sympy object | None` – strict conversion of a single formula
+- `clean_latex(latex) -> str` – remove labels, spacing and font macros
+- `split_conditions(latex) -> (formula, conditions)` – split off `\,\,\, (\Re(z)>0)` style conditions
+- `parse_constraints(conditions) -> dict` – bounds such as `{"z": {"min": 0.0}}`
+- `is_assignment(expr)`, `assignment_value(expr)` – recognise `g = 9.81`
 
-#### `parsub.analyzer.expression_analyzer`
+## Analyzer Module
 
-#### `analyze_expressions(expressions: List[Dict[str, Any]], context: Dict[str, Any] = None) -> List[Dict[str, Any]]`
-Analyze mathematical expressions to determine computation tasks.
+### `parsub.analyzer.expression_analyzer`
+
+#### `analyze_expressions(expressions, context=None) -> List[Dict[str, Any]]`
+Analyze expressions and return JSON-serialisable task dictionaries.
 
 **Args:**
-- `expressions`: List of expression dictionaries from parser
-- `context`: Optional context with goals, methods, and parameters
+- `expressions`: expression dictionaries from the parser (only `sympy_expr` is required;
+  `context`, `constraints`, `kind`, `label`, `latex` and `goal_type` are used when present)
+- `context`: optional `goals`, `methods`, `parameters` and `assignments`
 
-**Returns:**
-List of task dictionaries, each containing:
-- `expression`: String representation of the expression
-- `variables`: List of variable names
-- `goal_type`: Type of computation ('evaluate', 'plot', 'solve', 'optimize', 'integrate', 'differentiate')
-- `parameters`: Dictionary of parameter information
-- `suggested_sampling`: Sampling strategy for numerical evaluation
-- `expected_output_type`: Expected output type ('scalar', 'array', 'function')
+**Task dictionary:**
+- `expression`: what is computed (`str`); for a definition `y = f(x)` this is `f(x)`
+- `srepr`: exact SymPy representation used by the generated code
+- `latex`: LaTeX of `expression`
+- `variables`: free variables
+- `goal_type`: `evaluate`, `plot`, `solve`, `optimize`, `integrate`, `differentiate`, `series`,
+  `verify` or `symbolic`
+- `independent_variables`: variables that are swept
+- `fixed_parameters`: `{name: value}` for the other variables
+- `parameters`: per variable `type`, `range`, `default` and `role`
+- `suggested_sampling`: `method`, `points` and `ranges` (`{name: (min, max)}`)
+- `expected_output_type`: `scalar`, `array`, `function` or `symbolic`
+- `options`: goal-specific options (`direction` for optimize, `solve_for`, series `order`/`point`)
+- `label`: left-hand side of a definition, if any
+- `equation`: `lhs`/`rhs` (srepr and str) for `solve` and `verify`
+- `source_latex`, `source_label`: where the task came from
+- `description`: human-readable summary
 
 **Example:**
 ```python
 from parsub.analyzer.expression_analyzer import analyze_expressions
 
-tasks = analyze_expressions(parsed_result['expressions'], {
-    'goals': parsed_result['goals'],
-    'methods': parsed_result['methods']
+tasks = analyze_expressions(parsed["expressions"], {
+    "goals": parsed["goals"],
+    "methods": parsed["methods"],
+    "assignments": parsed["assignments"],
 })
 ```
 
 #### `ExpressionAnalyzer`
-Analyzer class with more granular control.
+`ExpressionAnalyzer().analyze_expressions(expressions, context)` returns `ComputationTask`
+objects instead of dictionaries (`task.to_dict()` converts them).
 
-##### `__init__()`
-Initialize a new ExpressionAnalyzer instance.
+## Code Generation Module
 
-##### `analyze_expressions(expressions, context) -> List[ComputationTask]`
-Return list of ComputationTask objects instead of dictionaries.
+### `parsub.generator.code_generator`
 
-### Code Generation Module
-
-#### `parsub.generator.code_generator`
-
-#### `generate_code_from_tasks(tasks: List[Dict[str, Any]], output_dir: str = "./output") -> str`
-Generate Python code from analysis tasks and save to file.
-
-**Args:**
-- `tasks`: List of task dictionaries from analyzer
-- `output_dir`: Directory to save generated code and outputs
-
-**Returns:**
-Path to generated Python code file
-
-**Example:**
-```python
-from parsub.generator.code_generator import generate_code_from_tasks
-
-code_file = generate_code_from_tasks(tasks, "./my_output")
-```
+#### `generate_code_from_tasks(tasks, output_dir="./output", source_name=None) -> str`
+Generate Python code from task dictionaries, save it as `generated_computation.py` and return its path.
 
 #### `CodeGenerator`
-Code generator class with more granular control.
+- `CodeGenerator(output_dir="./output")` – creates `output_dir`, `plots/` and `data/`
+- `generate_evaluation_code(tasks, source_name=None) -> str` – the complete script as a string
+- `save_code(code, filename="generated_computation.py") -> str` – save it and return the path
 
-##### `__init__(output_dir: str = "./output")`
-Initialize a new CodeGenerator.
+### `parsub.generator.runtime`
 
-##### `generate_evaluation_code(tasks: List[Dict[str, Any]]) -> str`
-Generate complete Python code as string (does not save to file).
+The helper library that is embedded in every generated script (and importable directly):
+- `lambdify_expr(expr, variables, fixed=None)` – vectorised numeric function; falls back to
+  point-by-point SymPy evaluation for integrals and sums (`.pointwise` tells which is used)
+- `evaluate_expression(expr, variables, values_dict) -> float`
+- `save_plot(fig, filename, ctx=...)`, `save_data(data, filename, ctx=...)` – `.csv`, `.tsv`,
+  `.xlsx` or `.json`
+- `evaluate_task`, `plot_task`, `solve_task`, `optimize_task`, `integrate_task`,
+  `differentiate_task`, `series_task`, `verify_task`, `symbolic_task` – one per goal type
+- `run_tasks(tasks, argv=None, default_output_dir=None) -> int` – command-line runner
+- `time_limit(seconds)`, `attempt(func, seconds)` – time limits (Unix)
 
-##### `save_code(code: str, filename: str = "generated_computation.py") -> str`
-Save generated code to file and return the path.
+## Shared Knowledge
 
-### CLI Module
+### `parsub.core.parameters`
 
-#### `parsub.cli.main`
+- `PARAMETER_HINTS`: `name -> (type, (min, max), default)` for common symbols
+- `infer_parameter_type(name)`, `infer_parameter_range(name)`, `default_value(name)`,
+  `describe_parameter(name, frequency)`; subscripted and variant names (`v_0`, `vartheta`)
+  use the entry of their base name.
 
-The CLI is accessed through the `parsub` command-line interface rather than direct Python imports.
+## CLI Module
 
-See the [User Guide](docs/user_guide.md) for detailed CLI documentation.
+### `parsub.cli.main`
 
-### API Module
+The Typer application `app` behind the `parsub` command (`main()` is the console-script entry
+point). See the [User Guide](user_guide.md#command-line-interface).
 
-#### `parsub.api.main`
+## REST API Module
 
-The API module contains the FastAPI application.
+### `parsub.api.main`
 
-##### `app`
-The FastAPI application instance.
+- `app`: the FastAPI application (`uvicorn parsub.api.main:app`)
+- `run(host=None, port=None)`: entry point of the `parsub-api` command
+- Environment variables: `PARSUB_OUTPUT_ROOT` (default `./output`), `PARSUB_API_HOST`
+  (default `127.0.0.1`), `PARSUB_API_PORT` (default `8000`)
 
-To run the API server:
-```bash
-uvicorn parsub.api.main:app --host 0.0.0.0 --port 8000
-```
-
-## Data Models
-
-### Internal Data Structures
-
-While not part of the public API, understanding these helps with advanced usage:
-
-#### `MathExpression` (in parser)
-Represents a parsed mathematical expression:
-- `raw_latex`: str
-- `sympy_expr`: Optional[sp.Expr]
-- `variables`: List[str]
-- `constants`: List[str]
-- `description`: Optional[str]
-
-#### `ComputationTask` (in analyzer)
-Represents a analysis task:
-- `expression`: str
-- `sympy_expr`: sp.Expr
-- `variables`: List[str]
-- `goal_type`: str
-- `parameters`: Dict[str, Any]
-- `suggested_sampling`: Dict[str, Any]
-- `expected_output_type`: str
-
-## Version Information
-
-### `__version__`
-Access the package version:
-```python
-import parsub
-print(parsub.__version__)  # Requires adding __version__ to __init__.py
-```
-
-Or via CLI:
-```bash
-parsub version
-```
+See the [User Guide](user_guide.md#rest-api) for the endpoints.
 
 ## Dependencies
 
-ParSub depends on these key packages:
-- `sympy` >= 1.12: Symbolic mathematics
-- `latexwalker` >= 2.1: LaTeX parsing
-- `numpy` >= 1.24.0: Numerical computations
-- `scipy` >= 1.10.0: Scientific algorithms
-- `matplotlib` >= 3.7.0: Plotting
-- `plotly` >= 5.15.0: Interactive plotting (optional)
-- `pandas` >= 2.0.0: Data handling
-- `typer` >= 0.9.0: CLI framework
-- `fastapi` >= 0.100.0: REST API framework
-- `uvicorn` >= 0.23.0: ASGI server
+- `sympy` >= 1.12 and `antlr4-python3-runtime` 4.11: symbolic mathematics and LaTeX parsing
+- `pylatexenc` >= 2.10: LaTeX tokenisation
+- `numpy` >= 1.24, `scipy` >= 1.10: numerical computation
+- `matplotlib` >= 3.7: plotting
+- `pandas` >= 2.0, `openpyxl` >= 3.1: data files (CSV/TSV/Excel)
+- `typer` >= 0.9, `rich` >= 12: command line interface
+- `fastapi` >= 0.100, `uvicorn` >= 0.23, `python-multipart`: REST API
 
 ## Error Handling
 
-ParSub follows these error handling principles:
-
-1. **Graceful Degradation**: When possible, ParSub continues with partial results rather than failing completely
-2. **Informative Errors**: Error messages include context about what failed and why
-3. **Validation**: Input validation occurs at API boundaries
-4. **Logging**: Internal errors are logged for debugging
-
-Common exceptions you might encounter:
-- `FileNotFoundError`: When input file doesn't exist
-- `ValueError`: When input data is invalid
-- `RuntimeError`: When code generation or execution fails
-- `ImportError`: When required dependencies are missing
+1. **Graceful degradation**: a formula that cannot be converted is reported, not guessed; a task
+   that fails or times out is recorded in `data/summary.json` while the others continue.
+2. **Informative errors**: the CLI prints clear messages and returns exit code 1; the REST API
+   returns 400/403/404/413/504 with a `detail` message.
+3. **Validation**: inputs are validated at the CLI and REST API boundaries.
 
 ## Extending ParSub
 
-### Adding New Goal Types
+### Adding a goal type (e.g. `fourier_transform`)
 
-To add a new type of computation (e.g., 'fourier_transform'):
+1. Add keywords to `GOAL_KEYWORDS` (and `GOAL_PRIORITY`) in `expression_analyzer.py`.
+2. Add a `fourier_task(ctx, task_id, expr, ...)` function to `generator/runtime.py`.
+3. Add a branch for the goal in `CodeGenerator._generate_task_code`.
+4. Add tests.
 
-1. Add the goal type to `ExpressionAnalyzer._determine_goal_type()`
-2. Add a code generation method in `CodeGenerator` (e.g., `_generate_fourier_code_block`)
-3. Update the task routing in `_generate_task_code`
+### Adding an output format
 
-### Adding New Output Formats
+Extend `save_data` in `generator/runtime.py` (the format is chosen by file extension).
 
-To add support for a new data format (e.g., HDF5):
+### Custom LaTeX constructs
 
-1. Add a save function in `CodeGenerator._generate_helper_functions()`
-2. Update the `save_data` helper to handle the new format
-3. Update documentation
-
-### Custom LaTeX Construct Handling
-
-For specialized LaTeX packages or macros:
-
-1. Extend `LaTeXParser` to recognize new constructs
-2. Add appropriate conversion to SymPy expressions
-3. Update parameter inference if needed
+Extend `clean_latex` / `_postprocess` in `parser/latex_to_sympy.py`.
 
 ## Changelog
 
-### Version 0.1.0 (Initial Release)
-- Basic LaTeX parsing and expression extraction
-- Goal detection (evaluate, solve, plot, optimize, integrate, differentiate)
-- Parameter inference and range suggestion
-- Python code generation with NumPy/SciPy/Matplotlib
-- CLI and REST API interfaces
-- Comprehensive test suite
-- Documentation and examples
-
----
-
-*Generated by ParSub v0.1.0*
+### Version 0.1.0
+- LaTeX parsing (inline/display math, align-like environments, labels, conditions, assignments)
+- Strict LaTeX → SymPy conversion with clean-up for real papers
+- Goal detection: evaluate, plot, solve, optimize, integrate, differentiate, series, verify, symbolic
+- Parameter inference with ranges, defaults and document-stated values
+- Self-contained generated scripts with isolated, time-limited tasks
+- CLI, Python API and REST API
+- Automated test suite and continuous integration

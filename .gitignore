@@ -73,7 +73,8 @@ Thumbs.db
 .output/
 output/
 demo_output/
-*.logtest_output/
+*.log
+test_output/
 api_results/
 _site/
 .jekyll-cache/

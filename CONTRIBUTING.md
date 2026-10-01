@@ -17,7 +17,7 @@ There are many ways to contribute to ParSub:
 1. Fork the repository on GitHub
 2. Clone your fork locally:
    ```bash
-   git clone https://github.com/yourusername/parsub.git
+   git clone https://github.com/<your-username>/parsub.git
    cd parsub
    ```
 
@@ -27,15 +27,12 @@ There are many ways to contribute to ParSub:
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
-4. Install development dependencies:
+4. Install the package with the development dependencies:
    ```bash
    pip install -e ".[dev]"
    ```
 
-5. Install pre-commit hooks (optional but recommended):
-   ```bash
-   pre-commit install
-   ```
+See the [Development Guide](docs/development_guide.md) for the project layout and debugging tips.
 
 ## 📝 Coding Standards
 
@@ -44,6 +41,7 @@ There are many ways to contribute to ParSub:
 - Write docstrings for all public classes and methods
 - Keep functions focused and under 50 lines when possible
 - Add unit tests for new functionality
+- Keep the code compatible with Python 3.9
 
 ## 🧪 Testing
 
@@ -54,7 +52,7 @@ pytest
 
 Run tests with coverage:
 ```bash
-pytest --cov=parsub tests/
+pytest --cov=parsub
 ```
 
 ## 🔄 Pull Request Process
@@ -83,7 +81,7 @@ pytest --cov=parsub tests/
    git push origin feature/amazing-feature
    ```
 
-7. Open a pull request against the `main` branch
+7. Open a pull request against the `master` branch
 
 ## 🐛 Bug Reports
 

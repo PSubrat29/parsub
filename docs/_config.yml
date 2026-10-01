@@ -1,0 +1,36 @@
+# GitHub Pages (Jekyll) configuration for the ParSub website.
+# Used only when GitHub Pages is configured to publish from the /docs folder
+# (the root _config.yml is used when publishing from the repository root).
+title: ParSub
+description: Turn the mathematics in LaTeX documents into runnable Python computations, plots and data.
+theme: jekyll-theme-cayman
+
+plugins:
+  - jekyll-relative-links
+  - jekyll-optional-front-matter
+  - jekyll-readme-index
+  - jekyll-titles-from-headings
+  - jekyll-default-layout
+  - jekyll-seo-tag
+
+relative_links:
+  enabled: true
+  collections: false
+
+markdown: kramdown
+kramdown:
+  input: GFM
+
+exclude:
+  - src/
+  - tests/
+  - pyproject.toml
+  - Gemfile
+  - Gemfile.lock
+  - "*.egg-info"
+  - output/
+  - demo_output/
+  - build/
+  - dist/
+  - venv/
+  - .venv/

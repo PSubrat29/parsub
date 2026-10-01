@@ -1,191 +1,192 @@
 # ParSub - Agentic Math/Physics Research Tool
 
+[![Tests](https://github.com/PSubrat29/parsub/actions/workflows/tests.yml/badge.svg)](https://github.com/PSubrat29/parsub/actions/workflows/tests.yml)
+[![Python](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://github.com/PSubrat29/parsub/blob/master/pyproject.toml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/PSubrat29/parsub/blob/master/LICENSE)
+
 ![ParSub Logo](docs/logo.png)
 
-**ParSub** is an intelligent research tool that analyzes LaTeX mathematical expressions, extracts computational goals, and automatically generates Python code for numerical evaluation, visualization, and data generation.
+**ParSub** reads the mathematics in a LaTeX document, works out what can be computed from it, and
+writes a ready-to-run Python script that evaluates, plots, solves, optimizes, integrates,
+differentiates or numerically verifies every formula it understands — producing publication-quality
+plots and data files.
+
+```
+paper.tex ──parse──► expressions ──analyze──► tasks ──generate──► generated_computation.py ──run──► plots/ + data/
+```
 
 ## 🔬 Features
 
-- **LaTeX Parsing**: Robustly extracts mathematical expressions from LaTeX source
-- **Goal Recognition**: Identifies research objectives (evaluate, solve, plot, optimize, integrate, differentiate)
-- **Parameter Inference**: Automatically identifies variables and suggests reasonable ranges
-- **Code Generation**: Produces executable Python code with NumPy, SymPy, and Matplotlib
-- **High-Quality Output**: Generates publication-ready plots (300 DPI) and data files (CSV/TSV/Excel)
-- **Privacy-First**: All processing happens locally - no data leaves your machine
-- **CLI & API**: Command-line interface and REST API for flexible usage
-- **Well-Tested**: Comprehensive unit test suite
+- **LaTeX parsing** – extracts inline (`$...$`, `\(...\)`) and display math (`$$...$$`, `\[...\]`,
+  `equation`, `align`, `gather`, `multline`, `eqnarray`, ...), splits multi-line environments,
+  keeps equation labels, skips the preamble, comments and bibliography.
+- **LaTeX → SymPy** – uses SymPy's LaTeX parser in strict mode (no silently truncated formulas) with
+  clean-up for real papers: `\pi`, `e^{x}`, `\Gamma(z)`, subscripts such as `v_0`/`x_{max}`, font
+  macros, `:=`, and side conditions such as `(\Re(z) > 0)` that become sampling constraints.
+- **Goal recognition** – reads the surrounding prose ("we want to plot", "find the maximum", "solve
+  for x", ...) to choose between *evaluate*, *plot*, *solve*, *optimize*, *integrate*,
+  *differentiate*, *series*, *verify* (numerical check of identities) and *symbolic*.
+- **Parameter inference** – decides which variables are swept and which are held fixed, with sensible
+  ranges and default values; values stated in the text (e.g. `$g = 9.81$`) are used automatically.
+- **Self-contained code generation** – one small, editable function per task plus an embedded helper
+  library (NumPy, SciPy, SymPy, Matplotlib, pandas). Integrals and infinite sums are evaluated
+  numerically when no closed form is needed.
+- **Robust execution** – every task runs in isolation with a time limit, so one hard formula never
+  blocks the rest; a `summary.json` records what succeeded.
+- **High-quality output** – 300 DPI PNG plots and CSV/TSV/Excel/JSON data.
+- **Privacy-first** – everything runs locally; no data leaves your machine.
+- **CLI, Python API and REST API**, covered by an automated test suite.
 
 ## 📦 Installation
 
+Requires Python 3.9 or newer.
+
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/parsub.git
+git clone https://github.com/PSubrat29/parsub.git
 cd parsub
-
-# Install in development mode
-pip install -e .
-
-# Or install from PyPI (when available)
-pip install parsub
+pip install -e .            # or: pip install -e ".[dev]" for the test tools
 ```
 
 ## 🚀 Quick Start
 
-### Using the Command Line
+### Command line
 
 ```bash
-# Analyze a LaTeX file
-parsub analyze paper.tex --output-dir ./results
+# Try the built-in projectile-motion demo (analyze + run)
+parsub demo --run
 
-# Run the generated code
-parsub run ./results/generated_computation.py --output-dir ./results
+# Analyze a LaTeX file, then run the generated code
+parsub analyze examples/projectile.tex --output-dir ./results
+parsub run ./results/generated_computation.py
 
-# Or do both in one step
-parsub analyze paper.tex --output-dir ./results && \
-parsub run ./results/generated_computation.py --output-dir ./results
+# ...or both in one step
+parsub analyze examples/sample.tex -o ./results --run
 ```
 
-### Using the Python API
+`parsub --help` lists all commands and options (`analyze`, `run`, `demo`, `version`).
+
+### Python API
+
+```python
+import parsub
+
+# One call: parse, analyze and write generated_computation.py + analysis.json
+result = parsub.analyze_latex(r"We plot $y = \sin(x) e^{-x/5}$", output_dir="./output")
+for task in result.tasks:
+    print(task["goal_type"], "-", task["description"])
+
+# Run the generated script (results go next to it: ./output/plots and ./output/data)
+process = parsub.run_generated_code(result.code_path)
+print(process.stdout)
+```
+
+The individual stages are available too:
 
 ```python
 from parsub.parser.latex_parser import parse_latex_source
 from parsub.analyzer.expression_analyzer import analyze_expressions
 from parsub.generator.code_generator import generate_code_from_tasks
 
-# Read LaTeX source
-with open("paper.tex", "r") as f:
-    latex_source = f.read()
-
-# Parse and analyze
-parsed = parse_latex_source(latex_source)
-tasks = analyze_expressions(
-    parsed.get('expressions', []),
-    {
-        'goals': parsed.get('goals', []),
-        'methods': parsed.get('methods', []),
-        'parameters': parsed.get('parameters', [])
-    }
-)
-
-# Generate code
+parsed = parse_latex_source(open("paper.tex", encoding="utf-8").read())
+tasks = analyze_expressions(parsed["expressions"], {
+    "goals": parsed["goals"],
+    "methods": parsed["methods"],
+    "assignments": parsed["assignments"],
+})
 code_file = generate_code_from_tasks(tasks, "./output")
-print(f"Generated code saved to: {code_file}")
 ```
 
-### Using the REST API
+### REST API
 
 ```bash
-# Start the API server
-parsub-api
+parsub-api                                   # http://127.0.0.1:8000 (interactive docs at /docs)
+# or: uvicorn parsub.api.main:app --host 0.0.0.0 --port 8000
 
-# Or using uvicorn directly
-uvicorn parsub.api.main:app --host 0.0.0.0 --port 8000
-
-# Analyze LaTeX via HTTP
-curl -X POST "http://localhost:8000/analyze" \
+curl -X POST http://127.0.0.1:8000/analyze \
   -H "Content-Type: application/json" \
-  -d '{
-    "latex_source": "\\\\begin{equation} E = mc^2 \\\\end{equation}",
-    "output_dir": "./api_results"
-  }'
+  -d '{"latex_source": "\\begin{equation} E = mc^2 \\end{equation}", "output_dir": "api_results"}'
+
+curl -X POST http://127.0.0.1:8000/run \
+  -H "Content-Type: application/json" \
+  -d '{"code_path": "api_results/generated_computation.py"}'
 ```
+
+Endpoints: `POST /analyze`, `POST /upload`, `POST /run`, `GET /execute/{path}`,
+`GET /download/{path}`, `GET /health`. All files live inside one output root
+(`PARSUB_OUTPUT_ROOT`, default `./output`); paths outside it are rejected.
 
 ## 📊 Output
 
-ParSub generates:
-- **Python code**: Ready-to-run computation scripts
-- **Plots**: High-resolution PNG/JPEG figures (300 DPI)
-- **Data**: CSV, TSV, or Excel files with numerical results
-- **Metadata**: JSON files with analysis details
-
-All outputs are saved in the specified output directory:
 ```
 output/
-├── generated_computation.py    # Generated Python code
+├── generated_computation.py     # the generated, editable Python script
+├── analysis.json                # what was extracted and why each task was chosen
 ├── plots/
-│   ├── task_1_plot.png         # 1D plots
-│   ├── task_2_surface_plot.png # 2D surface plots
-│   └── ...
+│   ├── task_1_plot.png          # 1-D plots
+│   ├── task_2_surface_plot.png  # 2-D surface plots
+│   └── task_3_verification_plot.png
 └── data/
-    ├── task_1_evaluation.csv   # Numerical data
-    ├── task_2_solutions.json   # Solution details
-    └── ...
+    ├── task_1_plot_data.csv     # numerical data
+    ├── task_3_verification.json # results (roots, extrema, integrals, identity checks, ...)
+    └── summary.json             # status of every task
 ```
+
+The generated script accepts `--output-dir DIR`, `--timeout SECONDS` (per task) and `--tasks 1,3`.
 
 ## 📚 Documentation
 
-- [User Guide](docs/user_guide.md) - Detailed usage instructions
-- [API Reference](docs/api_reference.md) - REST API documentation
-- [Development Guide](docs/development_guide.md) - Contributing to ParSub
-- [Examples](examples/) - Sample LaTeX files and expected outputs
+- [User Guide](docs/user_guide.md) – detailed usage of the CLI, Python API and REST API
+- [API Reference](docs/api_reference.md) – modules, functions and data formats
+- [Development Guide](docs/development_guide.md) – setting up, testing and contributing
+- [Examples](https://github.com/PSubrat29/parsub/tree/master/examples) – `projectile.tex` (physics) and
+  `sample.tex` (a research note on generalized Bessel functions)
 
 ## 🧪 Running Tests
 
 ```bash
-# Run all tests
-pytest
-
-# Run tests with coverage
-pytest --cov=parsub tests/
-
-# Run specific test module
-pytest tests/test_parser.py
+pip install -e ".[dev]"
+pytest                      # all tests
+pytest --cov=parsub         # with coverage
+pytest tests/test_parser.py # one module
 ```
-
-## 📝 Sample Usage
-
-See the [examples/](examples/) directory for sample LaTeX files.
-
-Try the demo:
-```bash
-parsub demo
-```
-
-This will:
-1. Parse a sample LaTeX file on projectile motion
-2. Extract equations, goals, and parameters
-3. Generate Python code to compute and plot trajectories
-4. Show you how to run the generated code
 
 ## 🔒 Privacy & Security
 
-ParSub is designed with privacy as a core principle:
-- **Local Processing**: All LaTeX parsing, analysis, and code generation happens on your machine
-- **No Telemetry**: We don't collect usage data or send information to external servers
-- **Secure Sandbox**: Generated code runs in a restricted environment when executed via the CLI
-- **File Access Control**: API endpoints restrict file access to designated output directories
+- **Local processing** – parsing, analysis, code generation and execution happen on your machine.
+- **No telemetry** – nothing is sent to external servers.
+- **Isolated execution** – generated code runs in a separate Python process with time limits.
+  It is ordinary Python, so review it before running code generated from documents you do not trust.
+- **File access control** – the REST API only reads and writes inside its output root and only runs
+  scripts that ParSub generated there.
 
 ## 🛠️ Architecture
 
 ```
-ParSub/
-├── cli/              # Command-line interface
-├── api/              # REST API interface
-├── parser/           # LaTeX parsing components
-├── analyzer/         # Expression analysis and goal detection
-├── generator/        # Python code generation
-├── tests/            # Unit tests
-├── examples/         # Sample LaTeX files
-└── docs/             # Documentation
+src/parsub/
+├── parser/      # LaTeX walking (pylatexenc) and LaTeX → SymPy conversion
+├── analyzer/    # goal detection, variable roles, sampling strategy
+├── generator/   # code generation + runtime helpers embedded in generated scripts
+├── core/        # shared parameter knowledge and the end-to-end pipeline
+├── cli/         # `parsub` command (Typer + Rich)
+└── api/         # REST API (FastAPI)
 ```
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions are welcome! See [CONTRIBUTING.md](https://github.com/PSubrat29/parsub/blob/master/CONTRIBUTING.md).
 
 ## 📄 License
 
-ParSub is released under the MIT License. See [LICENSE](LICENSE) for details.
-
-*✅ Publishing complete: ParSub v0.1.0 is now live at https://github.com/PSubrat29/parsub*
+ParSub is released under the MIT License. See [LICENSE](https://github.com/PSubrat29/parsub/blob/master/LICENSE).
 
 ## 🙏 Acknowledgements
 
-- Built with [SymPy](https://www.sympy.org/) for symbolic mathematics
-- Uses [LaTeXWalker](https://github.com/jeanmichel/LaTeXWalker) for LaTeX parsing
-- Plotting powered by [Matplotlib](https://matplotlib.org/) and [Plotly](https://plotly.com/)
-- CLI framework built with [Typer](https://typer.tiangolo.com/) and [Rich](https://rich.readthedocs.io/)
-- API powered by [FastAPI](https://fastapi.tiangolo.com/)
+- [SymPy](https://www.sympy.org/) for symbolic mathematics and LaTeX parsing
+- [pylatexenc](https://github.com/phfaist/pylatexenc) for LaTeX tokenisation
+- [NumPy](https://numpy.org/), [SciPy](https://scipy.org/), [pandas](https://pandas.pydata.org/) and
+  [Matplotlib](https://matplotlib.org/) for numerics, data and plotting
+- [Typer](https://typer.tiangolo.com/) and [Rich](https://rich.readthedocs.io/) for the CLI
+- [FastAPI](https://fastapi.tiangolo.com/) for the REST API
 
 ---
 
