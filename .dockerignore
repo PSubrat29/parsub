@@ -1,0 +1,21 @@
+# Only pyproject.toml, README.md, LICENSE, MANIFEST.in and src/ are needed to build the image
+.git
+.github
+**/__pycache__
+**/*.py[cod]
+*.egg-info
+build
+dist
+docs
+examples
+tests
+output
+demo_output
+results
+.pytest_cache
+.coverage
+htmlcov
+_site
+.jekyll-cache
+venv
+.venv

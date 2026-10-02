@@ -1,0 +1,100 @@
+name: Docker image
+
+# Builds the REST API image, tests it, and publishes it to the GitHub Container
+# Registry as ghcr.io/psubrat29/parsub (shown under "Packages" on the repository page).
+#
+#   push to master        -> :latest and :sha-<commit>
+#   tag vX.Y.Z            -> :X.Y.Z, :X.Y and :latest
+#   other branches, PRs   -> build and test only
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/psubrat29/parsub
+  PUBLISH: ${{ github.event_name != 'pull_request' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')) }}
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build the image for testing
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: parsub-api:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test the image
+        run: |
+          docker run -d --name parsub -p 8000:8000 -v parsub-data:/data parsub-api:test
+          for attempt in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/health && break; sleep 2; done
+          echo
+          test "$(docker exec parsub id -u)" = 1000
+
+          curl -fsS -X POST http://127.0.0.1:8000/analyze -H 'Content-Type: application/json' \
+            -d '{"latex_source": "We want to find the maximum range \\begin{equation} R = \\frac{v_0^2 \\sin(2\\theta)}{g} \\end{equation} with $g = 9.81$", "output_dir": "ci"}' \
+            | tee /tmp/analyze.json
+          echo
+          curl -fsS -X POST http://127.0.0.1:8000/run -H 'Content-Type: application/json' \
+            -d '{"code_path": "ci/generated_computation.py"}' -o /tmp/run.json
+          python3 - <<'EOF'
+          import json
+          run = json.load(open("/tmp/run.json"))
+          assert run["success"] and run["tasks_failed"] == 0, run
+          print("output files:", run["output_files"])
+          EOF
+          curl -fsS -o /tmp/optimum.json http://127.0.0.1:8000/download/ci/data/task_1_optimization.json
+          python3 -c "import json; m = json.load(open('/tmp/optimum.json'))['maximum']; print(m); assert abs(m['value'] - 100 / 9.81) < 1e-6"
+          test "$(curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:8000/download/..%2F..%2Fetc%2Fpasswd')" = 403
+
+      - name: Container logs
+        if: always()
+        run: docker logs parsub || true
+
+      - name: Image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v') }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=short
+
+      - name: Log in to the GitHub Container Registry
+        if: env.PUBLISH == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish (amd64 + arm64)
+        if: env.PUBLISH == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

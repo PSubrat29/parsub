@@ -30,11 +30,15 @@ pip install parsub
 
 parsub demo --run                                  # built-in projectile-motion demo
 parsub analyze paper.tex -o results --run
+
+# or the REST API in Docker (http://localhost:8000/)
+docker run -d -p 8000:8000 -v parsub-data:/data ghcr.io/psubrat29/parsub:latest
 ```
 
 ## Links
 
 - [ParSub on PyPI](https://pypi.org/project/parsub/) – current version: 0.2.0
+- [Docker image](https://github.com/PSubrat29/parsub/pkgs/container/parsub) – `ghcr.io/psubrat29/parsub`
 - [Source code on GitHub](https://github.com/PSubrat29/parsub)
 - [Releases](https://github.com/PSubrat29/parsub/releases)
 - [Example LaTeX files](https://github.com/PSubrat29/parsub/tree/master/examples)

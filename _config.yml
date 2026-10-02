@@ -25,6 +25,7 @@ exclude:
   - tests/
   - pyproject.toml
   - MANIFEST.in
+  - Dockerfile
   - Gemfile
   - Gemfile.lock
   - "*.egg-info"

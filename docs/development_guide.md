@@ -118,6 +118,9 @@ GitHub Actions workflows in `.github/workflows/`:
   live pages respond
 - `publish.yml` – on a published GitHub release (or manually): builds, checks and uploads the
   package to PyPI or TestPyPI, then installs the uploaded version from the index
+- `docker.yml` – on every push, pull request and release tag: builds the REST API image from the
+  `Dockerfile`, runs it and tests the API; on `master` and release tags it publishes the image
+  (amd64 + arm64) to `ghcr.io/psubrat29/parsub`
 
 ## Website
 
@@ -131,6 +134,26 @@ Links between Markdown files in `docs/` are converted automatically, so link to 
 not to `.html` files. `README.md` uses absolute links because it is also shown on PyPI.
 Avoid double opening curly braces and the brace-percent sequence anywhere in Markdown (even in code
 blocks): Jekyll treats them as Liquid template tags and the site build fails.
+
+## Docker image
+
+The `Dockerfile` builds a wheel from `src/` and installs it in a slim Python image that runs
+`parsub-api` as an unprivileged user, with `/data` as output root and a health check. The
+`docker.yml` workflow publishes it to the GitHub Container Registry using the repository's own
+`GITHUB_TOKEN`; no extra secret is needed. The image appears under **Packages** on the repository
+page.
+
+The image must be **public** so that anyone can `docker pull` it without logging in (a one-time
+setting): open https://github.com/users/PSubrat29/packages/container/package/parsub →
+**Package settings** → **Danger Zone → Change visibility → Public**.
+
+Local build and test:
+
+```bash
+docker build -t parsub-api .
+docker run --rm -p 8000:8000 parsub-api
+curl http://127.0.0.1:8000/health
+```
 
 ## Publishing to PyPI
 

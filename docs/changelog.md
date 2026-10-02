@@ -2,6 +2,11 @@
 
 All notable changes to ParSub. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+- Docker image of the REST API: `ghcr.io/psubrat29/parsub` (amd64 + arm64), built, tested and
+  published by GitHub Actions.
+
 ## 0.2.0 — 2 October 2026
 
 First release on PyPI: `pip install parsub` ([PyPI page](https://pypi.org/project/parsub/0.2.0/),

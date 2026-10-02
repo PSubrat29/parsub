@@ -45,7 +45,7 @@ paper.tex ──parse──► expressions ──analyze──► tasks ──ge
   blocks the rest; a `summary.json` records what succeeded.
 - **High-quality output** – 300 DPI PNG plots and CSV/TSV/Excel/JSON data.
 - **Privacy-first** – everything runs locally; no data leaves your machine.
-- **CLI, Python API and REST API**, covered by an automated test suite.
+- **CLI, Python API, REST API and Docker image**, covered by an automated test suite.
 
 ## 📦 Installation
 
@@ -130,6 +130,17 @@ curl -X POST http://127.0.0.1:8000/run \
 Endpoints: `POST /analyze`, `POST /upload`, `POST /run`, `GET /execute/{path}`,
 `GET /download/{path}`, `GET /health`. All files live inside one output root
 (`PARSUB_OUTPUT_ROOT`, default `./output`); paths outside it are rejected.
+
+### Docker
+
+The REST API is available as a ready-made image (no Python installation needed):
+
+```bash
+docker run -d --name parsub -p 8000:8000 -v parsub-data:/data ghcr.io/psubrat29/parsub:latest
+```
+
+Open http://localhost:8000/ for the interactive API documentation. See the
+[Docker section of the User Guide](https://psubrat29.github.io/parsub/docs/user_guide.html#docker).
 
 ## 📊 Output
 
