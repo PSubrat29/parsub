@@ -1,7 +1,9 @@
 name: Website
 
-# Builds the Jekyll site (README.md + docs/) and deploys it to GitHub Pages.
-# Requires Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
+# Builds the Jekyll site (README.md + docs/) and checks the live website.
+# - Pages source "GitHub Actions": this workflow deploys the site.
+# - Pages source "Deploy from a branch" (master, /): GitHub deploys it; this
+#   workflow only checks that the build works and that the live pages respond.
 
 on:
   push:
@@ -20,18 +22,27 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      build_type: ${{ steps.settings.outputs.build_type }}
+      site: ${{ steps.settings.outputs.site }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Show the GitHub Pages settings
+      - name: Read the GitHub Pages settings
+        id: settings
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh api "repos/${{ github.repository }}/pages" \
-            --jq '"status=\(.status) build_type=\(.build_type) source=\(.source.branch // "-"):\(.source.path // "-") url=\(.html_url)"' \
-            || echo "GitHub Pages is not enabled for this repository"
+          info=$(gh api "repos/${{ github.repository }}/pages" \
+                 --jq '"\(.build_type) \(.html_url) \(.source.branch // "-"):\(.source.path // "-")"' 2>/dev/null \
+                 || echo "none - -")
+          read -r build_type site source <<< "$info"
+          echo "GitHub Pages: build_type=${build_type} site=${site} source=${source}"
+          echo "build_type=${build_type}" >> "$GITHUB_OUTPUT"
+          echo "site=${site}" >> "$GITHUB_OUTPUT"
 
       - uses: actions/configure-pages@v5
+        if: steps.settings.outputs.build_type == 'workflow'
 
       - uses: actions/jekyll-build-pages@v1
         with:
@@ -39,9 +50,11 @@ jobs:
           destination: ./_site
 
       - uses: actions/upload-pages-artifact@v3
+        if: steps.settings.outputs.build_type == 'workflow'
 
   deploy:
     needs: build
+    if: needs.build.outputs.build_type == 'workflow'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -50,16 +63,22 @@ jobs:
       - id: deployment
         uses: actions/deploy-pages@v4
 
+  check:
+    needs: [build, deploy]
+    if: always() && needs.build.result == 'success' && needs.build.outputs.build_type != 'none' && needs.deploy.result != 'failure'
+    runs-on: ubuntu-latest
+    steps:
       - name: Check the live website
         env:
-          SITE: ${{ steps.deployment.outputs.page_url }}
+          SITE: ${{ needs.build.outputs.site }}
         run: |
           for page in "" "docs/" "docs/user_guide.html" "docs/validation.html"; do
             ok=no
-            for attempt in 1 2 3 4 5 6; do
-              if curl -fsSL "${SITE}${page}" | grep -q "ParSub"; then ok=yes; break; fi
+            for attempt in $(seq 1 12); do
+              status=$(curl -s -o /tmp/page.html -w "%{http_code}" "${SITE}${page}")
+              if [ "$status" = 200 ] && grep -q "ParSub" /tmp/page.html; then ok=yes; break; fi
               sleep 20
             done
-            echo "${SITE}${page} -> ${ok}"
+            echo "${SITE}${page} -> HTTP ${status}, ok=${ok}"
             test "$ok" = yes
           done
