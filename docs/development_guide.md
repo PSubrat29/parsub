@@ -172,7 +172,14 @@ index and runs the demo again. Before a PyPI upload it checks that the version i
    `0.2.0` → `0.2.1` for fixes or `0.3.0` for new features, and add the version to
    `docs/changelog.md`. Update "current version" in `docs/index.md`. Commit and push to `master`.
 3. Optional rehearsal: **Actions → Publish to PyPI → Run workflow**, choose `testpypi`,
-   **Run workflow**. It can be repeated as often as you like.
+   **Run workflow**. It can be repeated as often as you like. To try a rehearsal version
+   yourself, take only ParSub from TestPyPI and its dependencies from PyPI (TestPyPI contains
+   unrelated, sometimes broken, copies of popular packages):
+
+   ```bash
+   pip download --no-deps --dest wheel --index-url https://test.pypi.org/simple/ "parsub==X.Y.Z.devN"
+   pip install wheel/parsub-*.whl
+   ```
 4. **Releases → Draft a new release**:
    - **Choose a tag**: type `vX.Y.Z` and select *Create new tag: vX.Y.Z on publish*
    - **Target**: `master`
@@ -189,6 +196,7 @@ index and runs the demo again. Before a PyPI upload it checks that the version i
 |------------------|---------|-----|
 | `invalid-publisher: valid token, but no corresponding publisher` | PyPI/TestPyPI has no trusted publisher matching owner, repository, workflow and environment | Add or correct the publisher (step 2 of the setup), then **Re-run failed jobs** |
 | `400 File already exists` | That version is already on the index; PyPI and TestPyPI never accept the same file twice, not even after deleting it | For PyPI raise `__version__` and release again; rehearsals use unique `.devN` versions |
+| `FileNotFoundError ... DESCRIPTION.txt` (or another build error of a dependency) while installing from TestPyPI | pip took a dependency from TestPyPI instead of PyPI | Install only ParSub from TestPyPI (`pip download --no-deps ...`, see step 3) |
 | `Release tag vA does not match package version B` | Tag and `__version__` differ | Delete the release and its tag, or raise `__version__` to match, then release again |
 | `ParSub X is already on PyPI` | Version was released before | Raise `__version__` |
 | `Environment protection rules` / waiting | The `pypi` environment requires approval | Approve the deployment in the run's page |
