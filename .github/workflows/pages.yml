@@ -72,7 +72,7 @@ jobs:
         env:
           SITE: ${{ needs.build.outputs.site }}
         run: |
-          for page in "" "docs/" "docs/user_guide.html" "docs/validation.html"; do
+          for page in "" "docs/" "docs/user_guide.html" "docs/validation.html" "docs/changelog.html"; do
             ok=no
             for attempt in $(seq 1 12); do
               status=$(curl -s -o /tmp/page.html -w "%{http_code}" "${SITE}${page}")

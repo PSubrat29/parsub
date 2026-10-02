@@ -116,7 +116,8 @@ GitHub Actions workflows in `.github/workflows/`:
   on Python 3.9, 3.11 and 3.13, runs the complete test suite and the CLI demo end to end
 - `pages.yml` – on every push to `master`: builds and deploys the website, then checks that the
   live pages respond
-- `publish.yml` – on a published GitHub release: builds, checks and uploads the package to PyPI
+- `publish.yml` – on a published GitHub release (or manually): builds, checks and uploads the
+  package to PyPI or TestPyPI, then installs the uploaded version from the index
 
 ## Website
 
@@ -133,36 +134,64 @@ blocks): Jekyll treats them as Liquid template tags and the site build fails.
 
 ## Publishing to PyPI
 
-Publishing on PyPI is free. ParSub uses *Trusted Publishing*: GitHub Actions proves its identity to
-PyPI directly, so no password or API token is stored anywhere.
+ParSub is published at https://pypi.org/project/parsub/ (and rehearsed on
+https://test.pypi.org/project/parsub/). Publishing is free. It uses *Trusted Publishing*: GitHub
+Actions proves its identity to PyPI directly, so no password or API token is stored anywhere.
 
-### One-time setup
+The workflow `.github/workflows/publish.yml` does everything:
 
-1. Create an account at https://pypi.org/account/register/ (and, for rehearsals,
-   https://test.pypi.org/account/register/). Verify the e-mail address and enable two-factor
-   authentication (PyPI requires it).
+| Trigger | Uploads | Version |
+|---------|---------|---------|
+| Publishing a GitHub release `vX.Y.Z` | PyPI | `X.Y.Z` (must equal `__version__`) |
+| Actions → Publish to PyPI → Run workflow → `testpypi` | TestPyPI | `X.Y.Z.devN`, unique for every run |
+| Actions → Publish to PyPI → Run workflow → `pypi` | PyPI | `X.Y.Z` |
+
+Each run builds the sdist and wheel, runs `twine check --strict`, installs the wheel in a clean
+environment and runs the demo. It uploads, then installs exactly the uploaded version from the
+index and runs the demo again. Before a PyPI upload it checks that the version is not on PyPI yet.
+
+### One-time setup (already done for ParSub)
+
+1. Create accounts at https://pypi.org/account/register/ and https://test.pypi.org/account/register/
+   (they are separate), verify the e-mail addresses and enable two-factor authentication.
 2. On PyPI open **Your account → Publishing → Add a new pending publisher** and enter:
    - PyPI project name: `parsub`
    - Owner: `PSubrat29`, Repository name: `parsub`
    - Workflow name: `publish.yml`
    - Environment name: `pypi`
 
-   Do the same on TestPyPI with the environment name `testpypi`.
+   On TestPyPI do the same with the environment name `testpypi`. Once a project exists, the
+   publisher is listed under **Your projects → parsub → Manage → Publishing**.
 3. On GitHub open **Settings → Environments** and create the environments `pypi` and `testpypi`
    (optionally add yourself as a required reviewer for `pypi`, so every upload needs a click).
 
 ### Every release
 
-1. Make sure CI is green on `master`, and the documentation and changelog
-   (`docs/api_reference.md`) are up to date.
-2. Set the new version in `src/parsub/__init__.py` (`__version__`; `pyproject.toml` reads it from
-   there). PyPI never accepts the same version twice.
-3. Optional rehearsal: **Actions → Publish to PyPI → Run workflow → testpypi**, then
-   `pip install -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ parsub`.
-4. Commit, then create the release: **Releases → Draft a new release**, tag `vX.Y.Z` (must equal the
-   version), target `master`, write the notes, **Publish release**. The workflow builds the sdist and
-   wheel, runs `twine check`, installs the wheel in a clean environment, runs the demo and uploads.
-5. Check https://pypi.org/project/parsub/ and `pip install --upgrade parsub`.
+1. Make sure CI is green on `master`.
+2. Raise `__version__` in `src/parsub/__init__.py` (`pyproject.toml` reads it from there), e.g.
+   `0.2.0` → `0.2.1` for fixes or `0.3.0` for new features, and add the version to
+   `docs/changelog.md`. Update "current version" in `docs/index.md`. Commit and push to `master`.
+3. Optional rehearsal: **Actions → Publish to PyPI → Run workflow**, choose `testpypi`,
+   **Run workflow**. It can be repeated as often as you like.
+4. **Releases → Draft a new release**:
+   - **Choose a tag**: type `vX.Y.Z` and select *Create new tag: vX.Y.Z on publish*
+   - **Target**: `master`
+   - **Release title**: `ParSub vX.Y.Z`
+   - **Description**: the changelog entry for the version
+   - leave *Set as a pre-release* unchecked and *Set as the latest release* checked
+   - **Publish release**
+5. Watch **Actions → Publish to PyPI**: all jobs should end green, including
+   *Install the uploaded version*. Then check https://pypi.org/project/parsub/.
+
+### Troubleshooting
+
+| Error in the log | Meaning | Fix |
+|------------------|---------|-----|
+| `invalid-publisher: valid token, but no corresponding publisher` | PyPI/TestPyPI has no trusted publisher matching owner, repository, workflow and environment | Add or correct the publisher (step 2 of the setup), then **Re-run failed jobs** |
+| `400 File already exists` | That version is already on the index; PyPI and TestPyPI never accept the same file twice, not even after deleting it | For PyPI raise `__version__` and release again; rehearsals use unique `.devN` versions |
+| `Release tag vA does not match package version B` | Tag and `__version__` differ | Delete the release and its tag, or raise `__version__` to match, then release again |
+| `ParSub X is already on PyPI` | Version was released before | Raise `__version__` |
+| `Environment protection rules` / waiting | The `pypi` environment requires approval | Approve the deployment in the run's page |
 
 ### Manual alternative
 

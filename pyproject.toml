@@ -53,7 +53,8 @@ dev = [
 [project.urls]
 Homepage = "https://github.com/PSubrat29/parsub"
 Website = "https://psubrat29.github.io/parsub/"
-Documentation = "https://github.com/PSubrat29/parsub/tree/master/docs"
+Documentation = "https://psubrat29.github.io/parsub/docs/"
+Changelog = "https://psubrat29.github.io/parsub/docs/changelog.html"
 Repository = "https://github.com/PSubrat29/parsub"
 Issues = "https://github.com/PSubrat29/parsub/issues"
 

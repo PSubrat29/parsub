@@ -250,21 +250,4 @@ Extend `clean_latex` / `_postprocess` in `parser/latex_to_sympy.py`.
 
 ## Changelog
 
-### Version 0.2.0
-- Special-function notation: hypergeometric functions, Pochhammer symbols, Laguerre/Gegenbauer/Jacobi
-  polynomials, Bessel functions, indexed functions and derivative primes
-- The document's own function and parameter definitions are applied; `i = \sqrt{-1}` is honoured
-- Repeated definitions of a function and differential equations are verified numerically;
-  verifications report a verdict, agreeing points and where they disagree
-- Mentions in running text (`$\Gamma(z)$`, `$_1F_1(a;c;z)$`) are no longer turned into tasks
-- Chained relations (`a = b = \begin{cases}...`) keep their first relation
-- Validation report for the example paper; website deployment and PyPI release workflows
-
-### Version 0.1.0
-- LaTeX parsing (inline/display math, align-like environments, labels, conditions, assignments)
-- Strict LaTeX → SymPy conversion with clean-up for real papers
-- Goal detection: evaluate, plot, solve, optimize, integrate, differentiate, series, verify, symbolic
-- Parameter inference with ranges, defaults and document-stated values
-- Self-contained generated scripts with isolated, time-limited tasks
-- CLI, Python API and REST API
-- Automated test suite and continuous integration
+See the [changelog](changelog.md).

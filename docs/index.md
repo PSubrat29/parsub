@@ -21,6 +21,7 @@ paper.tex ──parse──► expressions ──analyze──► tasks ──ge
 - [API Reference](api_reference.md) – modules, functions and data formats
 - [Development Guide](development_guide.md) – project layout, tests, CI and releases
 - [Validation report](validation.md) – the example paper checked equation by equation
+- [Changelog](changelog.md) – what changed in each version
 
 ## Quick start
 
@@ -33,7 +34,9 @@ parsub analyze paper.tex -o results --run
 
 ## Links
 
+- [ParSub on PyPI](https://pypi.org/project/parsub/) – current version: 0.2.0
 - [Source code on GitHub](https://github.com/PSubrat29/parsub)
+- [Releases](https://github.com/PSubrat29/parsub/releases)
 - [Example LaTeX files](https://github.com/PSubrat29/parsub/tree/master/examples)
 - [Issue tracker](https://github.com/PSubrat29/parsub/issues)
 - [Contributing](https://github.com/PSubrat29/parsub/blob/master/CONTRIBUTING.md)

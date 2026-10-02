@@ -151,10 +151,11 @@ The generated script accepts `--output-dir DIR`, `--timeout SECONDS` (per task) 
 
 ## 📚 Documentation
 
-- [User Guide](https://github.com/PSubrat29/parsub/blob/master/docs/user_guide.md) – detailed usage of the CLI, Python API and REST API
-- [API Reference](https://github.com/PSubrat29/parsub/blob/master/docs/api_reference.md) – modules, functions and data formats
-- [Development Guide](https://github.com/PSubrat29/parsub/blob/master/docs/development_guide.md) – setting up, testing, releasing
-- [Validation report](https://github.com/PSubrat29/parsub/blob/master/docs/validation.md) – what ParSub found in the example paper
+- [User Guide](https://psubrat29.github.io/parsub/docs/user_guide.html) – detailed usage of the CLI, Python API and REST API
+- [API Reference](https://psubrat29.github.io/parsub/docs/api_reference.html) – modules, functions and data formats
+- [Development Guide](https://psubrat29.github.io/parsub/docs/development_guide.html) – setting up, testing, releasing
+- [Validation report](https://psubrat29.github.io/parsub/docs/validation.html) – what ParSub found in the example paper
+- [Changelog](https://psubrat29.github.io/parsub/docs/changelog.html) – what changed in each version
 - [Examples](https://github.com/PSubrat29/parsub/tree/master/examples) – `projectile.tex` (physics) and
   `sample.tex` (a research note on generalized Bessel functions)
 
@@ -180,7 +181,7 @@ function. The remaining three flag real problems:
 | w_α(0) = 0 | holds except at α = 0 | true for Re α > 0 only |
 
 Each finding was confirmed independently with mpmath. Details are in the
-[validation report](https://github.com/PSubrat29/parsub/blob/master/docs/validation.md).
+[validation report](https://psubrat29.github.io/parsub/docs/validation.html).
 
 ## 🧪 Running Tests
 
