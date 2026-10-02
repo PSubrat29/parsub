@@ -1,6 +1,6 @@
 # Validation: the example paper
 
-This page records what ParSub 0.2.0 does with
+This page records what ParSub 0.2 (0.2.0 and 0.2.1) does with
 [`examples/sample.tex`](https://github.com/PSubrat29/parsub/blob/master/examples/sample.tex),
 *A Note on Generalized Bessel Function*. The note has 25 numbered equations involving the
 Gamma and Beta functions, hypergeometric functions, the generalized Bessel function w_α(z),

@@ -197,7 +197,7 @@ index and runs the demo again. Before a PyPI upload it checks that the version i
 
 1. Make sure CI is green on `master`.
 2. Raise `__version__` in `src/parsub/__init__.py` (`pyproject.toml` reads it from there), e.g.
-   `0.2.0` → `0.2.1` for fixes or `0.3.0` for new features, and add the version to
+   `0.2.1` → `0.2.2` for fixes or `0.3.0` for new features, and add the version to
    `docs/changelog.md`. Update "current version" in `docs/index.md`. Commit and push to `master`.
 3. Optional rehearsal: **Actions → Publish to PyPI → Run workflow**, choose `testpypi`,
    **Run workflow**. It can be repeated as often as you like. To try a rehearsal version

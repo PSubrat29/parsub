@@ -1,0 +1,21 @@
+# ParSub REST API with Docker Compose.
+#
+#   docker compose up -d        # start  -> http://localhost:8000/
+#   docker compose logs -f      # follow the log
+#   docker compose down         # stop (results stay in the parsub-data volume)
+#
+# Documentation: https://psubrat29.github.io/parsub/docs/docker.html
+
+services:
+  parsub:
+    image: ghcr.io/psubrat29/parsub:latest
+    container_name: parsub
+    ports:
+      - "8000:8000"
+    volumes:
+      - parsub-data:/data
+    restart: unless-stopped
+
+volumes:
+  parsub-data:
+    name: parsub-data   # the same volume as "docker run -v parsub-data:/data"

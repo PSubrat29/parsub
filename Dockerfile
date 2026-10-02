@@ -25,7 +25,7 @@ LABEL org.opencontainers.image.title="ParSub REST API" \
       org.opencontainers.image.description="Turn the mathematics in LaTeX documents into runnable Python computations, plots and data" \
       org.opencontainers.image.source="https://github.com/PSubrat29/parsub" \
       org.opencontainers.image.url="https://psubrat29.github.io/parsub/" \
-      org.opencontainers.image.documentation="https://psubrat29.github.io/parsub/docs/user_guide.html#docker" \
+      org.opencontainers.image.documentation="https://psubrat29.github.io/parsub/docs/docker.html" \
       org.opencontainers.image.licenses="MIT"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

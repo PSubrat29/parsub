@@ -2,6 +2,7 @@
 
 [![Tests](https://github.com/PSubrat29/parsub/actions/workflows/tests.yml/badge.svg)](https://github.com/PSubrat29/parsub/actions/workflows/tests.yml)
 [![PyPI](https://img.shields.io/pypi/v/parsub)](https://pypi.org/project/parsub/)
+[![Docker image](https://img.shields.io/badge/docker-ghcr.io%2Fpsubrat29%2Fparsub-blue?logo=docker)](https://github.com/PSubrat29/parsub/pkgs/container/parsub)
 [![Python](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://github.com/PSubrat29/parsub/blob/master/pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/PSubrat29/parsub/blob/master/LICENSE)
 
@@ -139,8 +140,9 @@ The REST API is available as a ready-made image (no Python installation needed):
 docker run -d --name parsub -p 8000:8000 -v parsub-data:/data ghcr.io/psubrat29/parsub:latest
 ```
 
-Open http://localhost:8000/ for the interactive API documentation. See the
-[Docker section of the User Guide](https://psubrat29.github.io/parsub/docs/user_guide.html#docker).
+Open http://localhost:8000/ for the interactive API documentation. Image tags, Docker Compose,
+configuration and where results are kept are described on the
+[Docker page](https://psubrat29.github.io/parsub/docs/docker.html).
 
 ## 📊 Output
 
@@ -163,6 +165,7 @@ The generated script accepts `--output-dir DIR`, `--timeout SECONDS` (per task) 
 ## 📚 Documentation
 
 - [User Guide](https://psubrat29.github.io/parsub/docs/user_guide.html) – detailed usage of the CLI, Python API and REST API
+- [Docker image](https://psubrat29.github.io/parsub/docs/docker.html) – the REST API as a ready-made container
 - [API Reference](https://psubrat29.github.io/parsub/docs/api_reference.html) – modules, functions and data formats
 - [Development Guide](https://psubrat29.github.io/parsub/docs/development_guide.html) – setting up, testing, releasing
 - [Validation report](https://psubrat29.github.io/parsub/docs/validation.html) – what ParSub found in the example paper

@@ -18,6 +18,7 @@ paper.tex ──parse──► expressions ──analyze──► tasks ──ge
 
 - [User Guide](user_guide.md) – installation, command line, Python API, REST API, the generated
   script and troubleshooting
+- [Docker image](docker.md) – run the REST API with Docker, no Python installation needed
 - [API Reference](api_reference.md) – modules, functions and data formats
 - [Development Guide](development_guide.md) – project layout, tests, CI and releases
 - [Validation report](validation.md) – the example paper checked equation by equation
@@ -37,8 +38,8 @@ docker run -d -p 8000:8000 -v parsub-data:/data ghcr.io/psubrat29/parsub:latest
 
 ## Links
 
-- [ParSub on PyPI](https://pypi.org/project/parsub/) – current version: 0.2.0
-- [Docker image](https://github.com/PSubrat29/parsub/pkgs/container/parsub) – `ghcr.io/psubrat29/parsub`
+- [ParSub on PyPI](https://pypi.org/project/parsub/) – `pip install parsub` ![PyPI version](https://img.shields.io/pypi/v/parsub)
+- [Docker image on GitHub Packages](https://github.com/PSubrat29/parsub/pkgs/container/parsub) – `ghcr.io/psubrat29/parsub`
 - [Source code on GitHub](https://github.com/PSubrat29/parsub)
 - [Releases](https://github.com/PSubrat29/parsub/releases)
 - [Example LaTeX files](https://github.com/PSubrat29/parsub/tree/master/examples)

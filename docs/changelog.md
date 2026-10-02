@@ -2,10 +2,19 @@
 
 All notable changes to ParSub. Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.2.1 — 2 October 2026
 
-- Docker image of the REST API: `ghcr.io/psubrat29/parsub` (amd64 + arm64), built, tested and
-  published by GitHub Actions.
+Packaging and documentation release; ParSub's code is unchanged from 0.2.0
+([PyPI page](https://pypi.org/project/parsub/0.2.1/),
+[GitHub release](https://github.com/PSubrat29/parsub/releases/tag/v0.2.1)).
+
+- **Docker image** of the REST API: `ghcr.io/psubrat29/parsub` for amd64 and arm64, built, tested and
+  published by GitHub Actions; tags `0.2.1`, `0.2` and `latest`.
+- `compose.yaml` to start the API with `docker compose up -d`, and a new [Docker page](docker.md).
+- The PyPI page now shows the current README, with links to the website, the Docker image and the
+  changelog.
+- Release workflow: TestPyPI rehearsals can be repeated (unique `.devN` versions), PyPI uploads
+  check the version first, and every upload is followed by installing it from the index.
 
 ## 0.2.0 — 2 October 2026
 

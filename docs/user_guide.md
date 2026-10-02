@@ -27,7 +27,7 @@ pip install -e .
 
 # Verify the installation
 parsub --version
-# ParSub v0.2.0
+# ParSub v0.2.1
 ```
 
 ### Basic Concepts
@@ -316,7 +316,7 @@ Downloads a generated file, e.g. `GET /download/api_results/plots/task_1_surface
 ### GET /health
 
 ```json
-{"status": "healthy", "service": "ParSub API", "version": "0.2.0"}
+{"status": "healthy", "service": "ParSub API", "version": "0.2.1"}
 ```
 
 ### Status codes
@@ -339,70 +339,16 @@ Downloads a generated file, e.g. `GET /download/api_results/plots/task_1_surface
 
 ## Docker
 
-The REST API is also published as a Docker image, so it runs without installing Python:
-`ghcr.io/psubrat29/parsub` (for Intel/AMD and ARM machines, including Apple Silicon).
-
-### Run it
+The REST API is also available as a Docker image, `ghcr.io/psubrat29/parsub`, which runs without
+installing Python:
 
 ```bash
 docker run -d --name parsub -p 8000:8000 -v parsub-data:/data ghcr.io/psubrat29/parsub:latest
 ```
 
-Then open http://localhost:8000/ for the interactive API documentation, or use the endpoints
-described in [REST API](#rest-api) exactly as shown there:
-
-```bash
-curl http://localhost:8000/health
-
-curl -F "file=@paper.tex" -F "output_dir=paper" http://localhost:8000/upload
-curl -X POST http://localhost:8000/run -H "Content-Type: application/json" \
-  -d '{"code_path": "paper/generated_computation.py", "timeout": 900}'
-curl -O http://localhost:8000/download/paper/data/summary.json
-```
-
-Stop and remove it with `docker stop parsub && docker rm parsub`. Results stay in the
-`parsub-data` volume and are available again the next time a container uses it.
-
-### Image tags
-
-| Tag | Contents |
-|-----|----------|
-| `latest` | the current `master` branch |
-| `0.2.0`, `0.2` | a released version (published when a release `vX.Y.Z` is created) |
-| `sha-abc1234` | one specific commit |
-
-### Configuration
-
-| Setting | Default in the image | Meaning |
-|---------|----------------------|---------|
-| `-p HOST:8000` | — | the port on your computer |
-| `-v NAME:/data` | — | where generated code, plots and data are kept |
-| `PARSUB_OUTPUT_ROOT` | `/data` | output root inside the container |
-| `PARSUB_API_PORT` | `8000` | port inside the container |
-| `PARSUB_API_HOST` | `0.0.0.0` | listen address inside the container |
-
-To keep the results in a folder of your computer instead of a Docker volume, run the container
-with your own user id so that it can write there:
-
-```bash
-mkdir -p results
-docker run -d -p 8000:8000 -v "$PWD/results:/data" --user "$(id -u):$(id -g)" ghcr.io/psubrat29/parsub
-```
-
-The container runs as an unprivileged user, has a built-in health check (`docker ps` shows
-`healthy`) and stops cleanly on `docker stop`.
-
-### Build it yourself
-
-```bash
-git clone https://github.com/PSubrat29/parsub.git
-cd parsub
-docker build -t parsub-api .
-docker run -d -p 8000:8000 -v parsub-data:/data parsub-api
-```
-
-The API can run computations (`POST /run`); expose port 8000 only to people you trust or put
-it behind an authenticating reverse proxy.
+Then use http://localhost:8000/ exactly as described in [REST API](#rest-api). Tags, configuration,
+Docker Compose, where results are kept and how to build the image yourself are described on the
+[Docker page](docker.md).
 
 ## Understanding the Workflow
 

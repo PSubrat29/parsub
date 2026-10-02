@@ -8,7 +8,7 @@ For the command line and the REST API see the [User Guide](user_guide.md).
 ### `parsub`
 
 #### `__version__`
-The package version string, e.g. `"0.2.0"` (also shown by `parsub --version`).
+The package version string, e.g. `"0.2.1"` (also shown by `parsub --version`).
 
 #### `analyze_latex(latex_source, output_dir="./output", source_name=None) -> AnalysisResult`
 Parse, analyze and generate code for a LaTeX string. Writes `generated_computation.py` and
