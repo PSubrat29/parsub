@@ -6,6 +6,8 @@ name: Docker image
 #   push to master        -> :latest and :sha-<commit>
 #   tag vX.Y.Z            -> :X.Y.Z, :X.Y and :latest
 #   other branches, PRs   -> build and test only
+#   manual run on master with "version_tags" -> also :X.Y.Z and :X.Y, if src/ is
+#   unchanged since release vX.Y.Z (used to tag images of earlier releases)
 
 on:
   push:
@@ -13,6 +15,11 @@ on:
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      version_tags:
+        description: "Also tag the image with the released package version (X.Y.Z and X.Y)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -27,6 +34,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Version tags for a manual run
+        id: release
+        if: github.event_name == 'workflow_dispatch' && inputs.version_tags
+        run: |
+          version=$(python3 -c "import re; print(re.search(r'__version__ = \"([^\"]+)\"', open('src/parsub/__init__.py').read()).group(1))")
+          if ! git rev-parse -q --verify "refs/tags/v${version}" >/dev/null; then
+            echo "::error::There is no release tag v${version}; version tags are only for released versions"
+            exit 1
+          fi
+          if ! git diff --quiet "v${version}" HEAD -- src/; then
+            echo "::error::src/ differs from release v${version}; this image is not version ${version}"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "minor=${version%.*}" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-qemu-action@v3
 
@@ -78,6 +103,8 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha,format=short
+            type=raw,value=${{ steps.release.outputs.version }},enable=${{ steps.release.outputs.version != '' }}
+            type=raw,value=${{ steps.release.outputs.minor }},enable=${{ steps.release.outputs.version != '' }}
 
       - name: Log in to the GitHub Container Registry
         if: env.PUBLISH == 'true'

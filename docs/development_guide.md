@@ -143,9 +143,14 @@ The `Dockerfile` builds a wheel from `src/` and installs it in a slim Python ima
 `GITHUB_TOKEN`; no extra secret is needed. The image appears under **Packages** on the repository
 page.
 
-The image must be **public** so that anyone can `docker pull` it without logging in (a one-time
-setting): open https://github.com/users/PSubrat29/packages/container/package/parsub →
+The image is public, so anyone can `docker pull` it without logging in. Should it ever show as
+private, open https://github.com/users/PSubrat29/packages/container/package/parsub →
 **Package settings** → **Danger Zone → Change visibility → Public**.
+
+Tags: `latest` and `sha-<commit>` for every push to `master`; `X.Y.Z` and `X.Y` for every release
+tag `vX.Y.Z`. To add version tags to an image built after a release without code changes, run
+**Actions → Docker image → Run workflow** on `master` with *Also tag the image with the released
+package version*; it refuses if `src/` differs from the release.
 
 Local build and test:
 
