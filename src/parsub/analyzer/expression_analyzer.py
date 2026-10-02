@@ -126,16 +126,53 @@ class ExpressionAnalyzer:
         context = context or {}
         global_text = " ".join(list(context.get("goals", []) or []) + list(context.get("methods", []) or []))
         assignments = {str(k): float(v) for k, v in (context.get("assignments") or {}).items()}
+        constants = {
+            str(name): value
+            for name, value in ((k, self._as_sympy(v)) for k, v in (context.get("constants") or {}).items())
+            if value is not None
+        }
 
-        tasks: List[ComputationTask] = []
-        seen = set()
+        items = []
         for expr_data in expressions or []:
             expr = self._as_sympy(_get(expr_data, "sympy_expr"))
             if expr is None or _get(expr_data, "kind") == "assignment":
                 continue
             if isinstance(expr, Relational) and not isinstance(expr, sp.Equality):
                 continue  # inequalities/conditions are not computed
-            task = self._build_task(expr_data, expr, global_text, assignments)
+            if constants:
+                expr = expr.subs({sp.Symbol(name): value for name, value in constants.items()})
+            items.append((expr_data, expr))
+
+        # Definitions made in the document are used throughout the analysis:
+        # F(x) = ... expands later uses of F, and y = ... fixes the value of y.
+        self._function_defs = self._collect_function_definitions(items)
+        self._symbol_defs = self._collect_symbol_definitions(items)
+        self._usable_cache = {}
+
+        tasks: List[ComputationTask] = []
+        seen = set()
+        first_definition: Dict[Tuple[str, int], Tuple[Tuple[sp.Symbol, ...], sp.Basic, Any]] = {}
+        for expr_data, expr in items:
+            task = None
+            function_def = self._as_function_definition(expr)
+            if function_def is not None:
+                name, params, rhs = function_def
+                expanded_rhs = self._expand_functions(rhs, exclude=frozenset([name]))
+                key = (name, len(params))
+                if key in first_definition and not expanded_rhs.atoms(AppliedUndef):
+                    task = self._definition_check_task(first_definition[key], (params, expanded_rhs, expr_data),
+                                                       expr.lhs, global_text, assignments)
+                else:
+                    if key not in first_definition and not expanded_rhs.atoms(AppliedUndef):
+                        first_definition[key] = (params, expanded_rhs, expr_data)
+                    expr = sp.Eq(expr.lhs, expanded_rhs, evaluate=False)
+            elif isinstance(expr, sp.Equality):
+                # expand each side separately: Eq(a, a) must not collapse to True
+                expr = sp.Eq(self._expand_functions(expr.lhs), self._expand_functions(expr.rhs), evaluate=False)
+            else:
+                expr = self._expand_functions(expr)
+            if task is None:
+                task = self._build_task(expr_data, expr, global_text, assignments)
             if task is None:
                 continue
             key = (task.goal_type, sp.srepr(task.sympy_expr), task.equation and task.equation.get("lhs"))
@@ -144,6 +181,111 @@ class ExpressionAnalyzer:
             seen.add(key)
             tasks.append(task)
         return tasks
+
+    # ------------------------------------------------------------ definitions
+    @staticmethod
+    def _as_function_definition(expr: sp.Basic):
+        """``F(x, y) = rhs`` with distinct symbol arguments -> ``(name, params, rhs)``."""
+        if not isinstance(expr, sp.Equality) or not isinstance(expr.lhs, AppliedUndef):
+            return None
+        params = expr.lhs.args
+        if not all(arg.is_Symbol for arg in params) or len(set(params)) != len(params):
+            return None
+        if expr.lhs.func in {app.func for app in expr.rhs.atoms(AppliedUndef)}:
+            return None
+        return expr.lhs.func.__name__, tuple(params), expr.rhs
+
+    def _collect_function_definitions(self, items) -> Dict[str, List[Tuple[Tuple[sp.Symbol, ...], sp.Basic]]]:
+        definitions: Dict[str, List[Tuple[Tuple[sp.Symbol, ...], sp.Basic]]] = {}
+        for _, expr in items:
+            found = self._as_function_definition(expr)
+            if found is not None:
+                name, params, rhs = found
+                definitions.setdefault(name, []).append((params, rhs))
+        return definitions
+
+    @staticmethod
+    def _collect_symbol_definitions(items) -> Dict[str, sp.Basic]:
+        """
+        Parameter definitions such as ``theta = alpha + (b + 1)/2``: first definition of each symbol.
+
+        Definitions in terms of coordinate-like variables (``x = r cos(phi)``, ``y = x tan(theta)``)
+        describe curves or coordinate changes, not parameter values, and are not used.
+        """
+        definitions: Dict[str, sp.Basic] = {}
+        for _, expr in items:
+            if not (isinstance(expr, sp.Equality) and expr.lhs.is_Symbol and expr.rhs.free_symbols
+                    and expr.lhs not in expr.rhs.free_symbols):
+                continue
+            if any(base_name(symbol.name) in INDEPENDENT_PREFERENCE for symbol in expr.rhs.free_symbols):
+                continue
+            definitions.setdefault(expr.lhs.name, expr.rhs)
+        return definitions
+
+    def _usable_definition(self, name: str, arity: int, exclude: frozenset):
+        """First definition of ``name`` that expands into something computable."""
+        cache_key = (name, arity, exclude)
+        if cache_key in self._usable_cache:
+            return self._usable_cache[cache_key]
+        result = None
+        candidates = sorted(self._function_defs.get(name, []), key=lambda entry: len(entry[0]) != arity)
+        for params, rhs in candidates:
+            if len(params) < arity:
+                continue
+            expanded = self._expand_functions(rhs, exclude=exclude | {name})
+            if not expanded.atoms(AppliedUndef):
+                result = (params, expanded)
+                break
+        self._usable_cache[cache_key] = result
+        return result
+
+    def _expand_functions(self, expr: sp.Basic, exclude: frozenset = frozenset(), depth: int = 0) -> sp.Basic:
+        """Replace applications of functions defined in the document by their definitions."""
+        if depth > 5 or not getattr(self, "_function_defs", None):
+            return expr
+
+        def defined(node: sp.Basic) -> bool:
+            return (isinstance(node, AppliedUndef) and node.func.__name__ in self._function_defs
+                    and node.func.__name__ not in exclude)
+
+        def substitute(node: sp.Basic) -> sp.Basic:
+            entry = self._usable_definition(node.func.__name__, len(node.args), exclude)
+            if entry is None:
+                return node
+            params, rhs = entry
+            args = tuple(node.args)
+            if len(args) < len(params):
+                # w(z) used for w_alpha(z): the omitted leading indices stay symbolic
+                args = tuple(params[: len(params) - len(args)]) + args
+            return rhs.xreplace(dict(zip(params, args)))
+
+        expanded = expr.replace(defined, substitute)
+        if expanded != expr:
+            return self._expand_functions(expanded, exclude, depth + 1)
+        return expanded
+
+    def _definition_check_task(self, first, current, lhs: sp.Basic, global_text: str,
+                               assignments: Dict[str, float]) -> Optional[ComputationTask]:
+        """Two definitions of the same function: check numerically that they agree."""
+        params0, rhs0, data0 = first
+        params1, rhs1, data1 = current
+        rhs1 = rhs1.xreplace(dict(zip(params1, params0)))
+        label0, label1 = _get(data0, "label"), _get(data1, "label")
+        name = f"{lhs.func.__name__}({', '.join(map(str, params0))})"
+        refs = " and ".join(f"({label})" for label in (label0, label1) if label) or "two definitions"
+        constraints = dict(_get(data0, "constraints", {}) or {})
+        constraints.update(_get(data1, "constraints", {}) or {})
+        synthetic = {
+            "sympy_expr": sp.Eq(rhs0, rhs1, evaluate=False),
+            "goal_type": "verify",
+            "constraints": constraints,
+            "context": _get(data1, "context", ""),
+            "latex": _get(data1, "latex", ""),
+            "label": label1,
+            "independent": [str(params0[-1])] if params0 else [],
+            "title": f"that equations {refs} give the same {name}",
+        }
+        return self._build_task(synthetic, synthetic["sympy_expr"], global_text, assignments)
 
     # ---------------------------------------------------------- task building
     @staticmethod
@@ -172,7 +314,7 @@ class ExpressionAnalyzer:
     def _build_task(self, expr_data: Any, expr: sp.Basic, global_text: str,
                     assignments: Dict[str, float]) -> Optional[ComputationTask]:
         is_equation = isinstance(expr, sp.Equality)
-        definition = self._is_definition(expr)
+        definition = self._is_definition(expr) and _get(expr_data, "goal_type") != "verify"
         label: Optional[str] = None
         equation: Optional[Dict[str, str]] = None
 
@@ -197,12 +339,14 @@ class ExpressionAnalyzer:
             equation = None
             label = None
 
-        variables = self._order_variables(
-            [str(symbol) for symbol in target.free_symbols], assignments
-        )
+        free = expr.free_symbols if equation is not None else target.free_symbols
+        variables = self._order_variables([str(symbol) for symbol in free], assignments)
         constraints = _get(expr_data, "constraints", {}) or {}
         ranges = {var: self._range_for(var, constraints) for var in variables}
         independent = self._choose_independent(goal_type, variables, assignments, local_text + " " + global_text)
+        requested = [var for var in (_get(expr_data, "independent") or []) if var in variables]
+        if requested and goal_type not in ("symbolic", "solve"):
+            independent = requested + [var for var in independent if var not in requested][: max(0, len(independent) - len(requested))]
         fixed = {
             var: self._fixed_value(var, ranges[var], assignments)
             for var in variables if var not in independent and goal_type != "symbolic"
@@ -238,7 +382,7 @@ class ExpressionAnalyzer:
             source_latex=_get(expr_data, "latex", "") or _get(expr_data, "raw_latex", "") or "",
             source_label=_get(expr_data, "label"),
         )
-        task.description = self._describe(task)
+        task.description = self._describe(task, _get(expr_data, "title"))
         return task
 
     # ------------------------------------------------------------ goal logic
@@ -284,12 +428,14 @@ class ExpressionAnalyzer:
                 return "solve"
             lhs, rhs = expr.lhs, expr.rhs
             identity_like = (
-                has_calculus
+                expr.has(sp.Integral, sp.Sum, sp.Product, sp.Derivative)
+                or isinstance(rhs, sp.Function)
+                or lhs == rhs
                 or (isinstance(lhs, sp.Function) and not lhs.is_Pow)
                 or bool(target.atoms(sp.Function) - target.atoms(AppliedUndef))
                 and not target.is_polynomial(*target.free_symbols)
             )
-            if identity_like and lhs.free_symbols and rhs.free_symbols:
+            if identity_like and (lhs.free_symbols or rhs.free_symbols):
                 return "verify"
             return "solve"
 
@@ -344,8 +490,10 @@ class ExpressionAnalyzer:
         return (integer, rank, name)
 
     def _order_variables(self, names: List[str], assignments: Dict[str, float]) -> List[str]:
-        """Order variables: unassigned before assigned, then by preference."""
-        return sorted(set(names), key=lambda n: ((1 if n in assignments else 0),) + self._preference_key(n))
+        """Order variables: free ones before assigned/defined ones, then by preference."""
+        defined = getattr(self, "_symbol_defs", {})
+        return sorted(set(names), key=lambda n: ((1 if n in assignments or n in defined else 0),)
+                      + self._preference_key(n))
 
     @staticmethod
     def _solve_for_hint(text: str, variables: List[str]) -> Optional[str]:
@@ -360,7 +508,8 @@ class ExpressionAnalyzer:
         if not variables or goal_type == "symbolic":
             return []
         # Values stated in the document (g = 9.81) stay fixed unless nothing else varies
-        candidates = [var for var in variables if var not in assignments] or list(variables)
+        defined = getattr(self, "_symbol_defs", {})
+        candidates = [var for var in variables if var not in assignments and var not in defined] or list(variables)
         if goal_type == "solve":
             hinted = self._solve_for_hint(text, variables)
             return [hinted or candidates[0]]
@@ -384,15 +533,37 @@ class ExpressionAnalyzer:
             high = min(high, maximum - 0.01 * (maximum - low))
         return (round(float(low), 6), round(float(high), 6))
 
-    @staticmethod
-    def _fixed_value(name: str, value_range: Tuple[float, float], assignments: Dict[str, float]) -> float:
+    def _fixed_value(self, name: str, value_range: Tuple[float, float], assignments: Dict[str, float]) -> float:
         if name in assignments:
             return float(assignments[name])
+        derived = self._value_from_definition(name, assignments)
+        if derived is not None:
+            return round(derived, 6)
         default = float(parameter_hint(name)[2])
         low, high = value_range
         if not low <= default <= high:
             default = low + 0.25 * (high - low)
         return round(default, 6)
+
+    def _value_from_definition(self, name: str, assignments: Dict[str, float], depth: int = 0) -> Optional[float]:
+        """Value of a symbol defined in the document (e.g. theta = alpha + (b+1)/2)."""
+        definition = getattr(self, "_symbol_defs", {}).get(name)
+        if definition is None or depth > 5:
+            return None
+        values = {}
+        for symbol in definition.free_symbols:
+            if symbol.name in assignments:
+                values[symbol] = assignments[symbol.name]
+            else:
+                nested = self._value_from_definition(symbol.name, assignments, depth + 1)
+                values[symbol] = nested if nested is not None else parameter_hint(symbol.name)[2]
+        try:
+            number = complex(definition.subs(values).evalf())
+        except (TypeError, ValueError):
+            return None
+        if abs(number.imag) > 1e-12 or number.real != number.real:
+            return None
+        return float(number.real)
 
     # --------------------------------------------------------------- sampling
     def _extract_parameters_from_expr(self, expr: sp.Basic) -> Dict[str, Any]:
@@ -436,12 +607,14 @@ class ExpressionAnalyzer:
 
     # ------------------------------------------------------------ description
     @staticmethod
-    def _describe(task: ComputationTask) -> str:
+    def _describe(task: ComputationTask, title: Optional[str] = None) -> str:
         subject = f"{task.label} = {task.expression}" if task.label else task.expression
         if task.equation:
             subject = f"{task.equation['lhs_str']} = {task.equation['rhs_str']}"
         if len(subject) > 90:
             subject = subject[:87] + "..."
+        if title:
+            subject = title
         verbs = {
             "evaluate": "Evaluate", "plot": "Plot", "solve": "Solve", "optimize": "Find extrema of",
             "integrate": "Integrate", "differentiate": "Differentiate", "series": "Series-expand",

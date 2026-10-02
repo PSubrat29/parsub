@@ -28,6 +28,7 @@ from parsub.core.parameters import describe_parameter, infer_parameter_range, in
 from parsub.parser.latex_to_sympy import (
     assignment_value,
     clean_latex,
+    constant_value,
     free_symbol_names,
     is_assignment,
     latex_to_sympy,
@@ -134,7 +135,7 @@ class LaTeXParser:
         """
         try:
             segments, text = self._walk(latex_source or "")
-            expressions, assignments = self._convert_segments(segments)
+            expressions, assignments, constants = self._convert_segments(segments)
             goals = self._extract_goals(text)
             methods = self._extract_methods(text)
             parameters = self._extract_parameters(expressions)
@@ -144,6 +145,7 @@ class LaTeXParser:
                 "methods": methods,
                 "parameters": parameters,
                 "assignments": assignments,
+                "constants": constants,
                 "raw_latex": latex_source,
                 "text": text,
                 "statistics": {
@@ -159,6 +161,7 @@ class LaTeXParser:
                 "methods": [],
                 "parameters": [],
                 "assignments": {},
+                "constants": {},
                 "raw_latex": latex_source,
                 "text": "",
                 "statistics": {"math_segments": 0, "expressions": 0, "converted": 0},
@@ -266,6 +269,7 @@ class LaTeXParser:
         """Convert raw segments into expressions and collect ``symbol = value`` assignments."""
         expressions: List[MathExpression] = []
         assignments: Dict[str, float] = {}
+        constants: Dict[str, sp.Basic] = {}
         seen = set()
         for segment in segments:
             formula, conditions = split_conditions(segment.latex)
@@ -286,6 +290,9 @@ class LaTeXParser:
                 assignment = assignment_value(sympy_expr) if sympy_expr is not None else None
                 if assignment is not None:
                     assignments.setdefault(*assignment)
+                constant = constant_value(sympy_expr) if sympy_expr is not None else None
+                if constant is not None:
+                    constants.setdefault(*constant)
                 if not segment.display and (sympy_expr is None or not self._is_computational(sympy_expr)):
                     continue  # inline mentions such as $x$ or $\Gamma(z)$, or non-math fragments
                 if sympy_expr is not None and (
@@ -320,7 +327,7 @@ class LaTeXParser:
                         str(atom) for atom in sympy_expr.atoms(sp.NumberSymbol) | sympy_expr.atoms(type(sp.I))
                     )
                 expressions.append(expression)
-        return expressions, assignments
+        return expressions, assignments, constants
 
     @staticmethod
     def _is_computational(expr: sp.Basic) -> bool:
@@ -331,7 +338,13 @@ class LaTeXParser:
             return True
         if expr.is_Atom:
             return False
-        if isinstance(expr, sp.Function) and all(arg.is_Symbol for arg in expr.args):
+        # Mentions such as f(x, y), 1F1(a; c; z) or (2/sqrt(pi)) j_alpha name a quantity
+        _, core = expr.as_independent(*expr.free_symbols, as_Add=False)
+        if core.is_Symbol:
+            return False
+        if isinstance(core, sp.Function) and all(
+            isinstance(node, (sp.Symbol, sp.Tuple)) for node in sp.preorder_traversal(core) if node is not core
+        ):
             return False
         return True
 

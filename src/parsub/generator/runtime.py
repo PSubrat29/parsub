@@ -43,6 +43,7 @@ plt.rcParams["font.size"] = 10
 
 POINTWISE_LIMIT_1D = 120  # max samples when every point needs a SymPy evalf
 POINTWISE_LIMIT_2D = 25   # max samples per axis for pointwise surface plots
+POINTWISE_LIMIT_VERIFY = 40  # identity checks need fewer (expensive) samples
 SYMBOLIC_TIME_LIMIT = 20  # seconds allowed for symbolic solve/integrate/simplify
 
 
@@ -189,7 +190,8 @@ def attempt(func, seconds=SYMBOLIC_TIME_LIMIT):
 # ----------------------------------------------------------- numeric helpers
 def parse_sympy(text):
     """Rebuild a SymPy expression from its ``srepr`` (or plain string) form."""
-    return sp.sympify(text)
+    # srepr writes hypergeometric parameter lists as TupleArg(...), which sympify cannot rebuild
+    return sp.sympify(text, locals={"TupleArg": lambda *args: sp.Tuple(*args)})
 
 
 def symbol_map(expr):
@@ -266,8 +268,13 @@ def lambdify_expr(expr, variables, fixed=None):
 
     def scalar(*values):
         try:
-            value = expr.subs(dict(zip(args, [sp.Float(v) for v in values]))).evalf(15)
-            return complex(value)
+            value = expr.subs(dict(zip(args, [sp.Float(v) for v in values])))
+            number = value.evalf(15)
+            if not number.is_number or number.has(sp.Sum, sp.Integral, sp.Product):
+                # e.g. a series of 0**(2n + a) terms: let SymPy simplify it first
+                ok, simplified = attempt(lambda: value.doit(), seconds=3)
+                number = simplified.evalf(15) if ok else number
+            return complex(number)
         except Exception:  # noqa: BLE001
             return complex(np.nan)
 
@@ -661,7 +668,7 @@ def verify_task(ctx, task_id, lhs, rhs, independent=(), fixed=None, ranges=None,
         var = independent[0]
         fl = lambdify_expr(lhs, [var], fixed)
         fr = lambdify_expr(rhs, [var], fixed)
-        x = sample_axis(ranges.get(var, (-5, 5)), points, fl.pointwise or fr.pointwise)
+        x = sample_axis(ranges.get(var, (-5, 5)), points, fl.pointwise or fr.pointwise, POINTWISE_LIMIT_VERIFY)
         left, right = fl(x), fr(x)
         _line_plot(ctx, "task_%d_verification_plot.png" % task_id, x,
                    [("left: %s" % short(lhs, 40), left, "b-"), ("right: %s" % short(rhs, 40), right, "r--")],
@@ -669,15 +676,29 @@ def verify_task(ctx, task_id, lhs, rhs, independent=(), fixed=None, ranges=None,
         save_data({var: x, "lhs": left, "rhs": right, "abs_difference": np.abs(left - right)},
                   "task_%d_verification.csv" % task_id, ctx=ctx)
     else:
+        var, x = None, np.array([np.nan])
         left = np.array([evaluate_expression(lhs, None, fixed)])
         right = np.array([evaluate_expression(rhs, None, fixed)])
     mask = np.isfinite(left) & np.isfinite(right)
     difference = np.abs(left - right)[mask]
-    scale = np.maximum(1.0, np.abs(right[mask]))
+    relative = difference / np.maximum(1.0, np.abs(right[mask]))
+    agreeing = int((relative < rtol).sum())
     summary["compared_points"] = int(mask.sum())
+    summary["agreeing_points"] = agreeing
     summary["max_abs_difference"] = float(difference.max()) if difference.size else None
-    summary["max_rel_difference"] = float((difference / scale).max()) if difference.size else None
-    summary["identity_holds_numerically"] = bool(difference.size and (difference / scale).max() < rtol)
+    summary["max_rel_difference"] = float(relative.max()) if difference.size else None
+    summary["identity_holds_numerically"] = bool(difference.size and relative.max() < rtol)
+    if var is not None and difference.size and agreeing < difference.size:
+        summary["disagreeing_at"] = {var: [float(v) for v in x[mask][relative >= rtol][:10]]}
+    if not difference.size:
+        summary["verdict"] = "not comparable (no point where both sides are finite real numbers)"
+    elif summary["identity_holds_numerically"]:
+        summary["verdict"] = "holds at all %d compared points" % difference.size
+    elif agreeing >= 0.9 * difference.size:
+        summary["verdict"] = "holds at %d of %d points; fails at isolated points" % (agreeing, difference.size)
+    else:
+        summary["verdict"] = "does NOT hold (agrees at %d of %d points)" % (agreeing, difference.size)
+    print("    verification: %s" % summary["verdict"])
     save_data(summary, "task_%d_verification.json" % task_id, ctx=ctx)
     return summary
 

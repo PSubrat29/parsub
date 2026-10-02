@@ -8,7 +8,7 @@ For the command line and the REST API see the [User Guide](user_guide.md).
 ### `parsub`
 
 #### `__version__`
-The package version string, e.g. `"0.1.0"` (also shown by `parsub --version`).
+The package version string, e.g. `"0.2.0"` (also shown by `parsub --version`).
 
 #### `analyze_latex(latex_source, output_dir="./output", source_name=None) -> AnalysisResult`
 Parse, analyze and generate code for a LaTeX string. Writes `generated_computation.py` and
@@ -61,6 +61,7 @@ Parse LaTeX source and extract mathematical expressions and metadata.
 - `methods`: methods found in the prose ("we use ...", "by applying ...")
 - `parameters`: every free symbol with `name`, `frequency`, `type`, `suggested_range` and `default`
 - `assignments`: values stated in the document, e.g. `{"g": 9.81}`
+- `constants`: symbols given a non-real constant value, e.g. `{"i": I}` for `i = \sqrt{-1}`
 - `raw_latex`: the original input
 - `text`: the prose with formulas replaced by placeholders
 - `statistics`: `math_segments`, `expressions`, `converted`
@@ -71,7 +72,7 @@ Parse LaTeX source and extract mathematical expressions and metadata.
 - `latex`: the cleaned formula that was converted
 - `sympy_expr`: SymPy object (`sympy.Eq` for equations) or `None` if it could not be converted
 - `sympy_str`: `str(sympy_expr)` or `None`
-- `kind`: `"equation"`, `"expression"`, `"assignment"` or `None`
+- `kind`: `"equation"`, `"expression"`, `"assignment"` (`g = 9.81`, `a_1 = a`) or `None`
 - `variables`: names of the free symbols
 - `constants`: numeric constants used (`pi`, `E`, `I`)
 - `display`: `True` for display math
@@ -105,6 +106,11 @@ Helpers used by the parser:
 - `split_conditions(latex) -> (formula, conditions)` – split off `\,\,\, (\Re(z)>0)` style conditions
 - `parse_constraints(conditions) -> dict` – bounds such as `{"z": {"min": 0.0}}`
 - `is_assignment(expr)`, `assignment_value(expr)` – recognise `g = 9.81`
+- `constant_value(expr)` – recognise `i = \sqrt{-1}`
+
+Special-function notation (hypergeometric, Pochhammer, orthogonal polynomials, Bessel functions,
+indexed functions and primes for derivatives) is described in the
+[User Guide](user_guide.md#stage-1-latex-parsing).
 
 ## Analyzer Module
 
@@ -116,7 +122,11 @@ Analyze expressions and return JSON-serialisable task dictionaries.
 **Args:**
 - `expressions`: expression dictionaries from the parser (only `sympy_expr` is required;
   `context`, `constraints`, `kind`, `label`, `latex` and `goal_type` are used when present)
-- `context`: optional `goals`, `methods`, `parameters` and `assignments`
+- `context`: optional `goals`, `methods`, `parameters`, `assignments` and `constants`
+
+Function definitions found among the expressions are substituted into the other expressions,
+symbol definitions provide values for fixed parameters, and repeated definitions of the same
+function produce `verify` tasks that compare them.
 
 **Task dictionary:**
 - `expression`: what is computed (`str`); for a definition `y = f(x)` this is `f(x)`
@@ -239,6 +249,16 @@ Extend `save_data` in `generator/runtime.py` (the format is chosen by file exten
 Extend `clean_latex` / `_postprocess` in `parser/latex_to_sympy.py`.
 
 ## Changelog
+
+### Version 0.2.0
+- Special-function notation: hypergeometric functions, Pochhammer symbols, Laguerre/Gegenbauer/Jacobi
+  polynomials, Bessel functions, indexed functions and derivative primes
+- The document's own function and parameter definitions are applied; `i = \sqrt{-1}` is honoured
+- Repeated definitions of a function and differential equations are verified numerically;
+  verifications report a verdict, agreeing points and where they disagree
+- Mentions in running text (`$\Gamma(z)$`, `$_1F_1(a;c;z)$`) are no longer turned into tasks
+- Chained relations (`a = b = \begin{cases}...`) keep their first relation
+- Validation report for the example paper; website deployment and PyPI release workflows
 
 ### Version 0.1.0
 - LaTeX parsing (inline/display math, align-like environments, labels, conditions, assignments)

@@ -24,6 +24,7 @@ exclude:
   - src/
   - tests/
   - pyproject.toml
+  - MANIFEST.in
   - Gemfile
   - Gemfile.lock
   - "*.egg-info"

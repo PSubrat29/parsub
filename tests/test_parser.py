@@ -99,9 +99,17 @@ class TestLaTeXParser(unittest.TestCase):
         self.assertEqual(kinds, ["assignment", "assignment", "equation"])
 
     def test_inline_mentions_are_skipped(self):
-        """Bare symbols and inequalities in running text are not expressions."""
-        result = parse_latex_source(r"where $x$ is the distance, $\Gamma(z)$ the gamma function and $n\geq1$")
+        """Bare symbols, named functions and inequalities in running text are not expressions."""
+        result = parse_latex_source(
+            r"where $x$ is the distance, $\Gamma(z)$ the gamma function, $n\geq1$, "
+            r"$_{1}F_{1}(a;c;z)$ the confluent function and $\frac{2}{\sqrt{\pi}} j_{\alpha}$"
+        )
         self.assertEqual(result["expressions"], [])
+
+    def test_complex_constants(self):
+        result = parse_latex_source(r"where $i=\sqrt{-1}$")
+        self.assertEqual(result["constants"], {"i": sp.I})
+        self.assertEqual(result["assignments"], {})
 
     def test_preamble_and_comments_are_ignored(self):
         latex = r"""\documentclass{article}
@@ -137,7 +145,12 @@ class TestLaTeXParser(unittest.TestCase):
         self.assertTrue(gamma_def.rhs.has(sp.Integral))
         self.assertEqual(by_label["1"]["constraints"], {"z": {"min": 0.0}})
         self.assertTrue(by_label["9"]["sympy_expr"].rhs.has(sp.Sum))
-        self.assertGreaterEqual(result["statistics"]["converted"], 20)
+        self.assertTrue(by_label["7"]["sympy_expr"].lhs.has(sp.hyper))
+        self.assertTrue(by_label["21"]["sympy_expr"].lhs.has(sp.assoc_laguerre))
+        self.assertTrue(by_label["8"]["sympy_expr"].lhs.has(sp.Derivative))
+        # every numbered equation except the generic definition (4) is converted
+        unconverted = [e["label"] for e in result["expressions"] if e["sympy_expr"] is None]
+        self.assertEqual(unconverted, ["4"])
 
 
 class TestLatexToSympy(unittest.TestCase):
@@ -154,8 +167,29 @@ class TestLatexToSympy(unittest.TestCase):
 
     def test_partial_parses_are_rejected(self):
         """Trailing unparseable content must not be silently dropped."""
-        self.assertIsNone(latex_to_sympy(r"\frac{1}{\Gamma(a)} _{0}F_{1}(-; a; z)"))
+        self.assertIsNone(latex_to_sympy(r"\frac{1}{a} \mapsto \star b"))
         self.assertIsNone(latex_to_sympy(r"x_1, x_2, \ldots, x_n"))
+
+    def test_special_function_notation(self):
+        a, b, k, n, nu, t = sp.symbols("a b k n nu t")
+        self.assertEqual(latex_to_sympy(clean_latex(r"{}_1F_1(a; b; z)")), sp.hyper([a], [b], z))
+        self.assertEqual(latex_to_sympy(clean_latex(r"_{0}F_{1}\left(-; b; -z\right)")), sp.hyper([], [b], -z))
+        self.assertEqual(latex_to_sympy(clean_latex(r"(1+a)_{n}")), sp.rf(a + 1, n))
+        self.assertEqual(latex_to_sympy(clean_latex(r"\mathcal{L}_{k}^{(a)}(z)")), sp.assoc_laguerre(k, a, z))
+        self.assertEqual(latex_to_sympy(clean_latex(r"J_{\nu}(x)")), sp.besselj(nu, x))
+        self.assertEqual(latex_to_sympy(clean_latex(r"w_{a}(z)")), sp.Function("w")(a, z))
+        self.assertEqual(latex_to_sympy(clean_latex(r"f_{1}(t)")), sp.Function("f_1")(t))
+        self.assertEqual(latex_to_sympy(clean_latex(r"\sqrt[3]{x} + [a+b]")), sp.cbrt(x) + a + b)
+
+    def test_derivative_notation(self):
+        w = sp.Function("w")
+        expr = latex_to_sympy(clean_latex(r"z^{2} w^{\prime \prime}(z) + z w'(z)"))
+        self.assertEqual(expr, z**2 * sp.Derivative(w(z), (z, 2)) + z * sp.Derivative(w(z), z))
+
+    def test_spacing_inside_fraction_is_not_a_condition(self):
+        formula, conditions = split_conditions(r"\frac{a\, \, b}{c} = d")
+        self.assertEqual(conditions, "")
+        self.assertIn("frac", formula)
 
     def test_chained_equation(self):
         self.assertEqual(latex_to_sympy("a = b = c"), sp.Eq(sp.Symbol("a"), sp.Symbol("b")))

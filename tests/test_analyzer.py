@@ -18,6 +18,7 @@ def analyze_latex(latex):
         "methods": parsed["methods"],
         "parameters": parsed["parameters"],
         "assignments": parsed["assignments"],
+        "constants": parsed["constants"],
     }
     return analyze_expressions(parsed["expressions"], context)
 
@@ -130,6 +131,43 @@ class TestExpressionAnalyzer(unittest.TestCase):
         tasks = analyze_latex(r"$y = \sin(x) e^{-t}$ and $\int_0^1 x dx$")
         json.dumps(tasks)
         self.assertTrue(all("srepr" in task for task in tasks))
+
+    def test_function_definitions_are_expanded(self):
+        """pi(x) defined in the document is substituted where it is used later."""
+        latex = r"""
+        \begin{equation} C(z) = \sum_{n=0}^{\infty} \pi(n) \frac{z^{n}}{n!} \end{equation}
+        \begin{equation} \pi(x) = \frac{1}{\Gamma(x+1)} \end{equation}
+        """
+        task = analyze_latex(latex)[0]
+        self.assertNotEqual(task["goal_type"], "symbolic")
+        self.assertIn("gamma", task["expression"])
+
+    def test_repeated_definitions_are_cross_checked(self):
+        latex = r"""
+        \begin{equation}\label{a} f(x) = \sin(x)^2 \end{equation}
+        \begin{equation}\label{b} f(x) = \frac{1 - \cos(2x)}{2} \end{equation}
+        """
+        tasks = analyze_latex(latex)
+        self.assertEqual([t["goal_type"] for t in tasks], ["plot", "verify"])
+        self.assertIn("equations (a) and (b)", tasks[1]["description"])
+
+    def test_symbol_definitions_fix_parameter_values(self):
+        latex = r"""Let $b = 1$ and $\theta = \alpha + \frac{b+1}{2}$.
+        \begin{equation} y = \sin(\theta x) \end{equation}"""
+        task = analyze_latex(latex)[-1]
+        self.assertEqual(task["independent_variables"], ["x"])
+        self.assertEqual(task["fixed_parameters"]["theta"], 1.5)
+
+    def test_coordinate_definitions_do_not_fix_variables(self):
+        latex = r"""Let $x = r \cos(\phi)$. We plot \begin{equation} f = x^2 + y^2 \end{equation}"""
+        task = analyze_latex(latex)[-1]
+        self.assertEqual(task["independent_variables"], ["x", "y"])
+
+    def test_imaginary_unit_constant(self):
+        latex = r"""where $i=\sqrt{-1}$ and \begin{equation} e^{i x} = \cos(x) + i \sin(x) \end{equation}"""
+        task = analyze_latex(latex)[0]
+        self.assertEqual(task["goal_type"], "verify")
+        self.assertNotIn("i", task["variables"])
 
     def test_task_objects(self):
         analyzer = ExpressionAnalyzer()

@@ -20,16 +20,15 @@ paper.tex ──parse──► expressions ──analyze──► tasks ──ge
   script and troubleshooting
 - [API Reference](api_reference.md) – modules, functions and data formats
 - [Development Guide](development_guide.md) – project layout, tests, CI and releases
+- [Validation report](validation.md) – the example paper checked equation by equation
 
 ## Quick start
 
 ```bash
-git clone https://github.com/PSubrat29/parsub.git
-cd parsub
-pip install -e .
+pip install parsub
 
 parsub demo --run                                  # built-in projectile-motion demo
-parsub analyze examples/sample.tex -o results --run
+parsub analyze paper.tex -o results --run
 ```
 
 ## Links

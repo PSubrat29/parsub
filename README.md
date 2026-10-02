@@ -1,10 +1,11 @@
 # ParSub - Agentic Math/Physics Research Tool
 
 [![Tests](https://github.com/PSubrat29/parsub/actions/workflows/tests.yml/badge.svg)](https://github.com/PSubrat29/parsub/actions/workflows/tests.yml)
+[![PyPI](https://img.shields.io/pypi/v/parsub)](https://pypi.org/project/parsub/)
 [![Python](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://github.com/PSubrat29/parsub/blob/master/pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/PSubrat29/parsub/blob/master/LICENSE)
 
-![ParSub Logo](docs/logo.png)
+![ParSub Logo](https://raw.githubusercontent.com/PSubrat29/parsub/master/docs/logo.png)
 
 **ParSub** reads the mathematics in a LaTeX document, works out what can be computed from it, and
 writes a ready-to-run Python script that evaluates, plots, solves, optimizes, integrates,
@@ -23,6 +24,15 @@ paper.tex ──parse──► expressions ──analyze──► tasks ──ge
 - **LaTeX → SymPy** – uses SymPy's LaTeX parser in strict mode (no silently truncated formulas) with
   clean-up for real papers: `\pi`, `e^{x}`, `\Gamma(z)`, subscripts such as `v_0`/`x_{max}`, font
   macros, `:=`, and side conditions such as `(\Re(z) > 0)` that become sampling constraints.
+- **Special-function notation** – hypergeometric functions `{}_pF_q(a; b; z)`, Pochhammer symbols
+  `(a)_n`, Laguerre/Gegenbauer/Jacobi polynomials `L_n^{(a)}(x)`, Bessel functions `J_\nu(x)`,
+  indexed functions `w_{\alpha}(z)` and derivatives `w''(z)`, `w^{\prime}(z)`.
+- **Uses the document's own definitions** – a function defined in the paper (`\pi(x) = 1/\Gamma(x+1)`)
+  is substituted wherever it is used, parameters defined in terms of others
+  (`\vartheta = \alpha + (b+1)/2`) get consistent values, and `i = \sqrt{-1}` is honoured.
+- **Checks the mathematics** – identities, alternative definitions of the same function and
+  differential equations are verified numerically, so misprints are caught
+  (see [Validation](#-validation-on-a-real-paper)).
 - **Goal recognition** – reads the surrounding prose ("we want to plot", "find the maximum", "solve
   for x", ...) to choose between *evaluate*, *plot*, *solve*, *optimize*, *integrate*,
   *differentiate*, *series*, *verify* (numerical check of identities) and *symbolic*.
@@ -42,9 +52,15 @@ paper.tex ──parse──► expressions ──analyze──► tasks ──ge
 Requires Python 3.9 or newer.
 
 ```bash
+pip install parsub
+```
+
+From source (for development):
+
+```bash
 git clone https://github.com/PSubrat29/parsub.git
 cd parsub
-pip install -e .            # or: pip install -e ".[dev]" for the test tools
+pip install -e ".[dev]"     # includes the test tools
 ```
 
 ## 🚀 Quick Start
@@ -135,11 +151,36 @@ The generated script accepts `--output-dir DIR`, `--timeout SECONDS` (per task) 
 
 ## 📚 Documentation
 
-- [User Guide](docs/user_guide.md) – detailed usage of the CLI, Python API and REST API
-- [API Reference](docs/api_reference.md) – modules, functions and data formats
-- [Development Guide](docs/development_guide.md) – setting up, testing and contributing
+- [User Guide](https://github.com/PSubrat29/parsub/blob/master/docs/user_guide.md) – detailed usage of the CLI, Python API and REST API
+- [API Reference](https://github.com/PSubrat29/parsub/blob/master/docs/api_reference.md) – modules, functions and data formats
+- [Development Guide](https://github.com/PSubrat29/parsub/blob/master/docs/development_guide.md) – setting up, testing, releasing
+- [Validation report](https://github.com/PSubrat29/parsub/blob/master/docs/validation.md) – what ParSub found in the example paper
 - [Examples](https://github.com/PSubrat29/parsub/tree/master/examples) – `projectile.tex` (physics) and
   `sample.tex` (a research note on generalized Bessel functions)
+
+## ✅ Validation on a real paper
+
+[`examples/sample.tex`](https://github.com/PSubrat29/parsub/blob/master/examples/sample.tex) is a
+research note on generalized Bessel functions with 25 numbered equations. Running
+
+```bash
+parsub analyze examples/sample.tex -o results --run
+```
+
+converts every numbered equation except the generic definition (4) and runs 28 computations in about
+90 seconds. Of the 22 numerical checks, 19 confirm the paper's identities. Among them: the Gamma
+integral, both Beta-function forms, Kummer's second transformation, the claim that the series (9)
+solves the differential equation (8), and every alternative form of w_α(z) and of the Bessel-Clifford
+function. The remaining three flag real problems:
+
+| Equation | ParSub's verdict | Explanation |
+|----------|------------------|-------------|
+| (6) | does not hold | Kummer's first formula is misprinted; it should read ₁F₁(ε; ϱ; z) = eᶻ ₁F₁(ϱ−ε; **ϱ**; **−z**) |
+| (22) | does not hold | the Laguerre index should be L_k^{(ϑ)}, not L_k^{(ϑ−1)} (equation (23) is correct) |
+| w_α(0) = 0 | holds except at α = 0 | true for Re α > 0 only |
+
+Each finding was confirmed independently with mpmath. Details are in the
+[validation report](https://github.com/PSubrat29/parsub/blob/master/docs/validation.md).
 
 ## 🧪 Running Tests
 

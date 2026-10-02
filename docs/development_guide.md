@@ -32,7 +32,7 @@
 
 ```
 parsub/
-├── .github/workflows/tests.yml   # continuous integration
+├── .github/workflows/        # tests, website and PyPI release automation
 ├── docs/                         # documentation (also published on GitHub Pages)
 ├── examples/                     # example LaTeX files
 ├── src/parsub/
@@ -111,40 +111,67 @@ When changing behaviour, update the documentation:
 
 ## Continuous Integration
 
-GitHub Actions (`.github/workflows/tests.yml`) runs on every push and pull request:
-- installs the package with `pip install -e ".[dev]"` on Python 3.9, 3.11 and 3.13
-- runs the complete test suite
-- runs the CLI demo end to end
+GitHub Actions workflows in `.github/workflows/`:
+- `tests.yml` – on every push and pull request: installs the package with `pip install -e ".[dev]"`
+  on Python 3.9, 3.11 and 3.13, runs the complete test suite and the CLI demo end to end
+- `pages.yml` – on every push to `master`: builds and deploys the website, then checks that the
+  live pages respond
+- `publish.yml` – on a published GitHub release: builds, checks and uploads the package to PyPI
 
 ## Website
 
-The project website is served by GitHub Pages from the `master` branch with Jekyll:
-`_config.yml` selects the theme, `README.md` becomes the home page and the Markdown files in
-`docs/` become documentation pages (`docs/index.md` is the documentation index). Links between
-Markdown files are converted automatically, so link to `user_guide.md`, not to `.html` files.
+The website is built with Jekyll from the `master` branch: `_config.yml` selects the theme,
+`README.md` becomes the home page and the Markdown files in `docs/` become documentation pages
+(`docs/index.md` is the documentation index). It is published by the `pages.yml` workflow, which
+needs **Settings → Pages → Build and deployment → Source: GitHub Actions** (one-time setting).
+The site is at https://psubrat29.github.io/parsub/.
+
+Links between Markdown files in `docs/` are converted automatically, so link to `user_guide.md`,
+not to `.html` files. `README.md` uses absolute links because it is also shown on PyPI.
 Avoid double opening curly braces and the brace-percent sequence anywhere in Markdown (even in code
 blocks): Jekyll treats them as Liquid template tags and the site build fails.
 
-## Releasing New Versions
+## Publishing to PyPI
 
-ParSub uses [Semantic Versioning](https://semver.org/). The version is defined once, in
-`src/parsub/__init__.py` (`__version__`); `pyproject.toml` reads it from there.
+Publishing on PyPI is free. ParSub uses *Trusted Publishing*: GitHub Actions proves its identity to
+PyPI directly, so no password or API token is stored anywhere.
 
-1. Make sure CI is green and the documentation and changelog are up to date.
-2. Update `__version__`.
-3. Commit and tag:
-   ```bash
-   git commit -am "Release vX.Y.Z"
-   git tag vX.Y.Z
-   git push origin master --tags
-   ```
-4. Build and publish:
-   ```bash
-   pip install build twine
-   python -m build
-   twine upload dist/*
-   ```
-5. Create a GitHub release with the release notes.
+### One-time setup
+
+1. Create an account at https://pypi.org/account/register/ (and, for rehearsals,
+   https://test.pypi.org/account/register/). Verify the e-mail address and enable two-factor
+   authentication (PyPI requires it).
+2. On PyPI open **Your account → Publishing → Add a new pending publisher** and enter:
+   - PyPI project name: `parsub`
+   - Owner: `PSubrat29`, Repository name: `parsub`
+   - Workflow name: `publish.yml`
+   - Environment name: `pypi`
+
+   Do the same on TestPyPI with the environment name `testpypi`.
+3. On GitHub open **Settings → Environments** and create the environments `pypi` and `testpypi`
+   (optionally add yourself as a required reviewer for `pypi`, so every upload needs a click).
+
+### Every release
+
+1. Make sure CI is green on `master`, and the documentation and changelog
+   (`docs/api_reference.md`) are up to date.
+2. Set the new version in `src/parsub/__init__.py` (`__version__`; `pyproject.toml` reads it from
+   there). PyPI never accepts the same version twice.
+3. Optional rehearsal: **Actions → Publish to PyPI → Run workflow → testpypi**, then
+   `pip install -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ parsub`.
+4. Commit, then create the release: **Releases → Draft a new release**, tag `vX.Y.Z` (must equal the
+   version), target `master`, write the notes, **Publish release**. The workflow builds the sdist and
+   wheel, runs `twine check`, installs the wheel in a clean environment, runs the demo and uploads.
+5. Check https://pypi.org/project/parsub/ and `pip install --upgrade parsub`.
+
+### Manual alternative
+
+```bash
+pip install build twine
+python -m build                 # creates dist/parsub-X.Y.Z.tar.gz and .whl
+twine check --strict dist/*
+twine upload dist/*             # user name: __token__, password: a PyPI API token
+```
 
 ## Debugging
 

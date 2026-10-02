@@ -67,6 +67,7 @@ def analyze_latex(latex_source: str, output_dir: str = "./output", source_name: 
         "methods": parsed.get("methods", []),
         "parameters": parsed.get("parameters", []),
         "assignments": parsed.get("assignments", {}),
+        "constants": parsed.get("constants", {}),
     }
     tasks = analyze_expressions(parsed.get("expressions", []), context)
     code_path = generate_code_from_tasks(tasks, output_dir, source_name=source_name)
@@ -87,6 +88,7 @@ def analyze_latex(latex_source: str, output_dir: str = "./output", source_name: 
         "goals": parsed.get("goals", []),
         "methods": parsed.get("methods", []),
         "assignments": parsed.get("assignments", {}),
+        "constants": {name: str(value) for name, value in parsed.get("constants", {}).items()},
         "parameters": parsed.get("parameters", []),
         "expressions": [_expression_record(expr) for expr in parsed.get("expressions", [])],
         "tasks": tasks,

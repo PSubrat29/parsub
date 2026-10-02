@@ -1,0 +1,65 @@
+name: Website
+
+# Builds the Jekyll site (README.md + docs/) and deploys it to GitHub Pages.
+# Requires Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show the GitHub Pages settings
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${{ github.repository }}/pages" \
+            --jq '"status=\(.status) build_type=\(.build_type) source=\(.source.branch // "-"):\(.source.path // "-") url=\(.html_url)"' \
+            || echo "GitHub Pages is not enabled for this repository"
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./
+          destination: ./_site
+
+      - uses: actions/upload-pages-artifact@v3
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Check the live website
+        env:
+          SITE: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          for page in "" "docs/" "docs/user_guide.html" "docs/validation.html"; do
+            ok=no
+            for attempt in 1 2 3 4 5 6; do
+              if curl -fsSL "${SITE}${page}" | grep -q "ParSub"; then ok=yes; break; fi
+              sleep 20
+            done
+            echo "${SITE}${page} -> ${ok}"
+            test "$ok" = yes
+          done

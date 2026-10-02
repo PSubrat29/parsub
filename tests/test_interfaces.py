@@ -60,13 +60,23 @@ class TestPipeline(TempDirTestCase):
         code_path = parsub.analyze_latex_file(str(EXAMPLES / "projectile.tex"), self.test_dir)
         self.assertTrue(code_path.endswith("generated_computation.py"))
 
-    def test_sample_paper_runs_without_failures(self):
+    def test_sample_paper_identities(self):
+        """The example paper: every identity checks out except the two misprinted ones."""
         result = analyze_latex((EXAMPLES / "sample.tex").read_text(encoding="utf-8"), self.test_dir)
-        self.assertGreaterEqual(len(result.tasks), 10)
-        process = run_generated_code(result.code_path, timeout=900)
+        process = run_generated_code(result.code_path, timeout=1200)
         self.assertEqual(process.returncode, 0, process.stdout[-3000:] + process.stderr[-3000:])
-        with open(os.path.join(self.test_dir, "data", "task_1_verification.json")) as handle:
-            self.assertTrue(json.load(handle)["identity_holds_numerically"])
+        summary = read_run_summary(self.test_dir)
+        verdicts = {}
+        for record, task in zip(summary["tasks"], result.tasks):
+            if task["goal_type"] == "verify":
+                label = task["source_label"] or "inline"
+                verdicts.setdefault(label, []).append(record["summary"]["identity_holds_numerically"])
+        failing = {label for label, values in verdicts.items() if not all(values)}
+        # (6): Kummer's first formula is misprinted; (22): L^(theta-1) should be L^(theta);
+        # inline: w_alpha(0) = 0 holds only for alpha > 0 (it fails at alpha = 0).
+        self.assertEqual(failing, {"6", "22", "inline"})
+        for label in ("1", "3", "7", "8", "10", "13", "14", "16", "17", "18", "19", "20", "21", "23", "24", "25", "b"):
+            self.assertTrue(all(verdicts[label]), label)
 
     def test_no_math_gives_warning(self):
         result = analyze_latex("Just prose, no mathematics.", self.test_dir)

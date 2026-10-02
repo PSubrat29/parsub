@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61", "wheel"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,16 +7,16 @@ name = "ParSub"
 dynamic = ["version"]
 description = "Agentic Math/Physics research tool for LaTeX analysis and numerical evaluation"
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.9"
 authors = [
     { name = "ParSub Developer SParida", email = "paridasubrat553@gmail.com" },
 ]
-keywords = ["latex", "sympy", "mathematics", "physics", "research", "code-generation"]
+keywords = ["latex", "sympy", "mathematics", "physics", "research", "code-generation", "special-functions", "verification"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",

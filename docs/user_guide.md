@@ -17,13 +17,16 @@
 ParSub requires Python 3.9 or higher.
 
 ```bash
+pip install parsub
+
+# or, from source:
 git clone https://github.com/PSubrat29/parsub.git
 cd parsub
 pip install -e .
 
 # Verify the installation
 parsub --version
-# ParSub v0.1.0
+# ParSub v0.2.0
 ```
 
 ### Basic Concepts
@@ -312,7 +315,7 @@ Downloads a generated file, e.g. `GET /download/api_results/plots/task_1_surface
 ### GET /health
 
 ```json
-{"status": "healthy", "service": "ParSub API", "version": "0.1.0"}
+{"status": "healthy", "service": "ParSub API", "version": "0.2.0"}
 ```
 
 ### Status codes
@@ -353,6 +356,29 @@ Each formula is converted with SymPy's LaTeX parser in strict mode, so a formula
 converted completely or reported as not converted (`sympy_expr = None`) — it is never
 silently truncated.
 
+Besides ordinary algebra, calculus (`\int`, `\sum`, `\frac{d}{dx}`) and elementary functions,
+ParSub understands this notation:
+
+| LaTeX | Meaning |
+|-------|---------|
+| `\Gamma(z)`, `\pi`, `e^{x}`, `\sqrt[n]{x}` | gamma function, π, exponential, n-th root |
+| `{}_pF_q(a_1, ..., a_p; b_1, ..., b_q; z)`, `_{0}F_{1}(-; b; z)` | generalized hypergeometric function |
+| `(a)_{n}` | Pochhammer symbol (rising factorial) |
+| `L_n^{(a)}(x)`, `C_n^{(a)}(x)`, `P_n^{(a,b)}(x)` | Laguerre, Gegenbauer, Jacobi polynomials |
+| `J_{\nu}(x)`, `Y_{\nu}(x)`, `I_{\nu}(x)`, `K_{\nu}(x)` | Bessel functions |
+| `w_{\alpha}(z)`, `M_{k,\vartheta}(z)` | indexed functions, read as `w(alpha, z)`, `M(k, vartheta, z)` |
+| `w'(z)`, `w''(z)`, `w^{\prime\prime}(z)` | derivatives |
+| `[ ... ]`, `\left( ... \right)` | grouping |
+| `a = b = c`, `:=` | the first relation is used |
+
+The document's own definitions are applied:
+- a **function definition** such as `\pi(x) = \frac{1}{\Gamma(x+1)}` or
+  `w_{\alpha}(z) = \sum ...` is substituted wherever that function is used, in any equation;
+  `w(z)` in a differential equation also uses the definition of `w_{\alpha}(z)`
+- a **parameter definition** such as `\vartheta = \alpha + \frac{b+1}{2}` gives `\vartheta` a value
+  consistent with the other parameters
+- `i = \sqrt{-1}` makes `i` the imaginary unit
+
 ### Stage 2: Goal and context analysis
 
 For each expression the analyzer chooses a goal:
@@ -373,13 +399,20 @@ Keywords in the sentences just before a formula count twice as much as the docum
 goals and methods. Definitions such as `y = f(x)` or `B(\zeta, \eta) = ...` compute the
 right-hand side and use the left-hand side as the label.
 
+When the same function is defined more than once — for example a series and a hypergeometric
+representation of the same function — the first definition is plotted or evaluated and every
+later one becomes a `verify` task that checks it against the first. Differential equations
+satisfied by a defined function are verified the same way. A verification reports
+`identity_holds_numerically`, the largest absolute and relative differences, the number of
+agreeing points and a one-line `verdict`. See the [validation report](validation.md) for an example.
+
 ### Stage 3: Parameter inference
 
 - **Independent variables** (swept) are chosen by name: `x`, `t`, `z`, `r`, `theta`, ...
   come before parameters such as `g`, `m`, `alpha`; values stated in the document are never swept
   unless nothing else can be.
-- **Fixed parameters** get the value stated in the document or a typical default
-  (`g = 9.81`, `theta = pi/4`, generic constants `= 1`, ...).
+- **Fixed parameters** get the value stated in the document, the value implied by a definition
+  in the document, or a typical default (`g = 9.81`, `theta = pi/4`, generic constants `= 1`, ...).
 - **Ranges** come from the variable name (e.g. `t` in [0, 10], `theta` in [0, 2π]) and
   are tightened by side conditions.
 

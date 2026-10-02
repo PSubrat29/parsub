@@ -5,7 +5,11 @@ The heavy lifting is done by SymPy's LaTeX parser (ANTLR backend).  This module
 adds the pre-processing that real papers need (labels, spacing, font macros,
 trailing conditions such as ``(\\Re(z) > 0)``) and the post-processing that makes
 the result usable for numerical work (``\\pi`` -> ``pi``, ``e^{x}`` -> ``exp(x)``,
-``\\Gamma(z)`` -> ``gamma(z)``, clean symbol names such as ``v_0``).
+``\\Gamma(z)`` -> ``gamma(z)``, clean symbol names such as ``v_0``).  Standard
+special-function notation is understood as well: hypergeometric functions
+``{}_pF_q(a; b; z)``, Pochhammer symbols ``(a)_n``, Laguerre/Gegenbauer/Jacobi
+polynomials ``L_n^{(a)}(x)``, Bessel functions ``J_\\nu(x)`` and indexed functions
+``w_{\\alpha}(z)`` (read as ``w(alpha, z)``).
 """
 
 import re
@@ -100,7 +104,7 @@ def strip_outer_braces(latex: str) -> str:
     return text
 
 
-def split_top_level(latex: str, separator: str = ",") -> List[str]:
+def split_top_level(latex: str, separator: str = ",", keep_empty: bool = False) -> List[str]:
     """Split at ``separator`` characters that are not nested in (), [] or {}."""
     parts: List[str] = []
     depth = 0
@@ -117,17 +121,32 @@ def split_top_level(latex: str, separator: str = ",") -> List[str]:
         else:
             current.append(char)
     parts.append("".join(current))
-    return [part for part in (piece.strip() for piece in parts) if part]
+    stripped = [piece.strip() for piece in parts]
+    return stripped if keep_empty else [part for part in stripped if part]
 
 
 def split_conditions(latex: str) -> Tuple[str, str]:
     """Split ``formula \\,\\,\\, (conditions)`` into the formula and the conditions."""
     text = re.sub(r"[\s,.;:]+$", "", _DROP_MACROS.sub("", latex))
     text = strip_outer_braces(text)
-    match = _CONDITION_SEPARATOR.search(text)
-    if match and text[: match.start()].strip():
-        return text[: match.start()], text[match.end():]
+    for match in _CONDITION_SEPARATOR.finditer(text):
+        # only spacing at the top level separates conditions (not inside \frac{...}{...})
+        if _nesting_depth(text, match.start()) == 0 and text[: match.start()].strip():
+            return text[: match.start()], text[match.end():]
     return text, ""
+
+
+def _nesting_depth(text: str, position: int) -> int:
+    depth = 0
+    for index in range(position):
+        char = text[index]
+        if index > 0 and text[index - 1] == "\\":
+            continue
+        if char in "({[":
+            depth += 1
+        elif char in ")}]":
+            depth = max(depth - 1, 0)
+    return depth
 
 
 def clean_latex(latex: str) -> str:
@@ -139,6 +158,7 @@ def clean_latex(latex: str) -> str:
     text = _FONT_MACROS.sub(r"\1", text)
     text = re.sub(r"\\(?:left|right)\s*\.", "", text)
     text = re.sub(r"\\(?:left|right)\s*\\([{}])", r"\\\1", text)
+    text = re.sub(r"\\(?:left|right)\s*(?=[()\[\]|])", "", text)
     text = re.sub(r"\\(?:mid|vert)(?![A-Za-z])", "|", text)
     text = _SPACING.sub(" ", text)
     text = re.sub(r"\s+", " ", text).strip()
@@ -158,6 +178,197 @@ def _protect_word_subscripts(latex: str) -> Tuple[str, Dict[str, str]]:
     return _WORD_SUBSCRIPT.sub(replace, latex), mapping
 
 
+# ----------------------------------------------------------------------------
+# Special-function notation that SymPy's LaTeX parser does not understand.
+# Each construct is replaced by a placeholder call Q_{7xxx}(...) that the parser
+# reads as a function application; _postprocess turns it into the real object.
+# ----------------------------------------------------------------------------
+_GREEK = (
+    "alpha", "beta", "gamma", "delta", "epsilon", "varepsilon", "zeta", "eta", "theta",
+    "vartheta", "iota", "kappa", "lambda", "mu", "nu", "xi", "rho", "varrho", "sigma",
+    "tau", "upsilon", "phi", "varphi", "chi", "psi", "omega", "Gamma", "Delta", "Theta",
+    "Lambda", "Xi", "Sigma", "Upsilon", "Phi", "Psi", "Omega",
+)
+_FUNCTION_NAME = r"(?<![A-Za-z\\])(\\(?:%s)(?![A-Za-z])|[A-Za-z])" % "|".join(sorted(_GREEK, key=len, reverse=True))
+_HYPERGEOMETRIC = re.compile(
+    r"(?:\{\s*\}\s*)?_\s*(?:\{\s*(\d)\s*\}|(\d))\s*F\s*_\s*(?:\{\s*(\d)\s*\}|(\d))\s*\("
+)
+_POLYNOMIAL = re.compile(
+    r"(?<![A-Za-z\\])([A-Za-z])\s*_\s*(?:\{([^{}]*)\}|([A-Za-z0-9]))\s*\^\s*\{\s*\(([^{}()]*)\)\s*\}\s*\("
+)
+_INDEXED_FUNCTION = re.compile(_FUNCTION_NAME + r"\s*_\s*(?:\{([^{}]*)\}|([A-Za-z]))\s*\(")
+_POCHHAMMER_TAIL = re.compile(r"\)\s*_\s*(?:\{([^{}]*)\}|([A-Za-z0-9]))")
+_PRIMED_FUNCTION = re.compile(
+    r"(?<![A-Za-z\\])([A-Za-z])\s*(?:\^\s*\{\s*((?:\\prime\s*)+)\}|('+))\s*\("
+)
+_PLACEHOLDER_NAME = re.compile(r"^Q_\{?(7\d{3})\}?$")
+_BESSEL = {"J": sp.besselj, "Y": sp.bessely, "I": sp.besseli, "K": sp.besselk}
+
+
+def _brackets_to_parentheses(latex: str) -> str:
+    """``[ ... ]`` grouping -> ``( ... )`` (the optional argument of ``\\sqrt[n]`` is kept)."""
+    out: List[str] = []
+    index = 0
+    while index < len(latex):
+        if latex.startswith("\\sqrt[", index):
+            close = _matching_close(latex, index + 5)
+            if close == -1:
+                return latex
+            out.append(latex[index:close + 1])
+            index = close + 1
+            continue
+        char = latex[index]
+        escaped = index > 0 and latex[index - 1] == "\\"
+        out.append("(" if char == "[" and not escaped else ")" if char == "]" and not escaped else char)
+        index += 1
+    return "".join(out)
+
+
+class _Placeholders:
+    def __init__(self) -> None:
+        self.mapping: Dict[str, Tuple[str, Tuple]] = {}
+
+    def new(self, kind: str, *info) -> str:
+        token = str(7001 + len(self.mapping))
+        self.mapping[token] = (kind, info)
+        return "Q_{" + token + "}"
+
+
+def _rewrite_hypergeometric(latex: str, holders: _Placeholders) -> str:
+    """``{}_pF_q(a_1, ...; b_1, ...; z)`` -> placeholder(a..., b..., z)."""
+    search_from = 0
+    while True:
+        match = _HYPERGEOMETRIC.search(latex, search_from)
+        if not match:
+            return latex
+        open_index = match.end() - 1
+        close = _matching_close(latex, open_index)
+        parts = split_top_level(latex[open_index + 1:close], ";", keep_empty=True) if close != -1 else []
+        if len(parts) != 3:
+            search_from = match.end()
+            continue
+        numerators, denominators = (
+            [] if part.strip() in ("", "-", "--") else split_top_level(part) for part in parts[:2]
+        )
+        arguments = ", ".join(numerators + denominators + [parts[2]])
+        token = holders.new("hyper", len(numerators), len(denominators))
+        latex = latex[:match.start()] + token + "(" + arguments + latex[close:]
+        search_from = match.start()
+
+
+def _rewrite_polynomials(latex: str, holders: _Placeholders) -> str:
+    """``L_n^{(a)}(x)``, ``C_n^{(a)}(x)``, ``P_n^{(a,b)}(x)`` -> placeholder(n, a[, b], x)."""
+    def replace(match: "re.Match[str]") -> str:
+        letter, index = match.group(1), match.group(2) or match.group(3)
+        params = split_top_level(match.group(4))
+        kind = {("L", 1): "laguerre", ("C", 1): "gegenbauer", ("P", 2): "jacobi"}.get((letter, len(params)), "indexed")
+        token = holders.new(kind, letter)
+        return token + "(" + ", ".join([index] + params) + ", "
+
+    return _POLYNOMIAL.sub(replace, latex)
+
+
+def _rewrite_pochhammer(latex: str, holders: _Placeholders) -> str:
+    """Pochhammer symbol ``(a)_{n}`` -> placeholder(a, n)."""
+    search_from = 0
+    while True:
+        match = _POCHHAMMER_TAIL.search(latex, search_from)
+        if not match:
+            return latex
+        close = match.start()
+        depth, open_index = 0, -1
+        for index in range(close, -1, -1):
+            if latex[index] == ")":
+                depth += 1
+            elif latex[index] == "(":
+                depth -= 1
+                if depth == 0:
+                    open_index = index
+                    break
+        if open_index == -1 or (open_index > 0 and latex[open_index - 1].isalpha()):
+            search_from = match.end()  # f(x)_n: a function value, not a Pochhammer symbol
+            continue
+        index = match.group(1) or match.group(2)
+        token = holders.new("rf")
+        latex = latex[:open_index] + token + "(" + latex[open_index + 1:close] + ", " + index + ")" + latex[match.end():]
+        search_from = open_index
+
+
+def _rewrite_indexed_functions(latex: str, holders: _Placeholders) -> str:
+    """``w_{\\alpha}(z)`` -> placeholder(alpha, z): the subscript becomes an argument."""
+    def replace(match: "re.Match[str]") -> str:
+        name, index = match.group(1), match.group(2) or match.group(3)
+        if re.fullmatch(r"\s*\d+\s*", index) or re.fullmatch(r"7\d{3}|9\d{3}", index.strip()):
+            return match.group(0)  # f_1(x), or a protected token: keep the parser's default
+        token = holders.new("indexed", name.lstrip("\\"))
+        return token + "(" + index + ", "
+
+    return _INDEXED_FUNCTION.sub(replace, latex)
+
+
+def _rewrite_derivatives(latex: str, holders: _Placeholders) -> str:
+    """``w''(z)`` or ``w^{\prime\prime}(z)`` -> placeholder(z) for the 2nd derivative of w."""
+    def replace(match: "re.Match[str]") -> str:
+        order = match.group(2).count("prime") if match.group(2) else len(match.group(3))
+        return holders.new("derivative", match.group(1), order) + "("
+
+    return _PRIMED_FUNCTION.sub(replace, latex)
+
+
+def _prepare_special_notation(latex: str) -> Tuple[str, Dict[str, Tuple[str, Tuple]]]:
+    holders = _Placeholders()
+    text = _brackets_to_parentheses(latex)
+    text = _rewrite_derivatives(text, holders)
+    text = _rewrite_hypergeometric(text, holders)
+    text = _rewrite_polynomials(text, holders)
+    text = _rewrite_pochhammer(text, holders)
+    text = _rewrite_indexed_functions(text, holders)
+    return text, holders.mapping
+
+
+def _build_placeholder(kind: str, info: Tuple, args: Tuple[sp.Basic, ...]) -> sp.Basic:
+    if kind == "hyper":
+        p, q = info
+        if len(args) != p + q + 1:
+            raise ValueError("hypergeometric argument count")
+        return sp.hyper(args[:p], args[p:p + q], args[-1])
+    if kind == "rf":
+        return sp.rf(*args)
+    if kind == "laguerre" and len(args) == 3:
+        return sp.assoc_laguerre(*args)
+    if kind == "gegenbauer" and len(args) == 3:
+        return sp.gegenbauer(*args)
+    if kind == "jacobi" and len(args) == 4:
+        return sp.jacobi(*args)
+    if kind == "derivative":
+        name, order = info
+        function = sp.Function(name)(*args)
+        variable = args[-1]
+        if variable.is_Symbol:
+            return sp.Derivative(function, variable, order)
+        dummy = sp.Dummy("t")
+        return sp.Subs(sp.Derivative(sp.Function(name)(*(args[:-1] + (dummy,))), dummy, order), dummy, variable)
+    name = info[0]
+    if kind == "indexed" and name in _BESSEL and len(args) == 2:
+        return _BESSEL[name](*args)
+    return sp.Function(name)(*args)
+
+
+def _replace_placeholders(expr: sp.Basic, mapping: Dict[str, Tuple[str, Tuple]]) -> sp.Basic:
+    if not mapping:
+        return expr
+
+    def is_placeholder(node: sp.Basic) -> bool:
+        return isinstance(node, AppliedUndef) and bool(_PLACEHOLDER_NAME.match(node.func.__name__))
+
+    def build(node: sp.Basic) -> sp.Basic:
+        token = _PLACEHOLDER_NAME.match(node.func.__name__).group(1)
+        kind, info = mapping[token]
+        return _build_placeholder(kind, info, node.args)
+
+    return expr.replace(is_placeholder, build)
+
+
 def clean_name(name: str, word_subscripts: Optional[Dict[str, str]] = None) -> str:
     """Turn a SymPy symbol name such as ``v_{0}`` or ``w_{alpha}`` into ``v_0``/``w_alpha``."""
     for token, word in (word_subscripts or {}).items():
@@ -169,11 +380,13 @@ def clean_name(name: str, word_subscripts: Optional[Dict[str, str]] = None) -> s
     return name or "x"
 
 
-def _postprocess(expr: sp.Basic, word_subscripts: Dict[str, str]) -> sp.Basic:
+def _postprocess(expr: sp.Basic, word_subscripts: Dict[str, str],
+                 placeholders: Optional[Dict[str, Tuple[str, Tuple]]] = None) -> sp.Basic:
     """Rebuild the expression with clean names and standard constants/functions."""
     # Evaluate the unevaluated tree that the LaTeX parser produces (flattens
     # nested Add/Mul, turns log(x, E) into log(x)), without evaluating integrals.
     expr = sp.sympify(sp.srepr(expr))
+    expr = _replace_placeholders(expr, placeholders or {})
 
     replacements: Dict[sp.Basic, sp.Basic] = {}
     for symbol in expr.free_symbols:
@@ -225,8 +438,12 @@ def latex_to_sympy(latex: str) -> Optional[sp.Basic]:
     if not latex or not latex.strip() or _parse_latex is None:
         return None
     if re.search(r"\.\.\.|\\[lcv]?dots|\\begin|\\end", latex):
+        sides = split_top_level(latex, "=", keep_empty=True)
+        if len(sides) >= 3 and all(sides[:2]) and not re.search(r"\.\.\.|dots|\\begin", sides[0] + sides[1]):
+            return latex_to_sympy(sides[0] + " = " + sides[1])
         return None
     prepared, word_subscripts = _protect_word_subscripts(latex)
+    prepared, placeholders = _prepare_special_notation(prepared)
     try:
         try:
             # strict mode rejects input that would otherwise be parsed only partially
@@ -234,13 +451,17 @@ def latex_to_sympy(latex: str) -> Optional[sp.Basic]:
         except TypeError:  # SymPy without the ``strict`` argument
             expr = _parse_latex(prepared)
     except (LaTeXParsingError, Exception):  # noqa: BLE001 - the parser raises many types
+        sides = split_top_level(latex, "=", keep_empty=True)
+        if len(sides) >= 3 and all(sides[:2]):
+            # a = b = \begin{cases}...: keep the first, parseable relation
+            return latex_to_sympy(sides[0] + " = " + sides[1])
         return None
     if isinstance(expr, sp.Equality) and isinstance(expr.lhs, sp.Equality):
         expr = sp.Eq(expr.lhs.lhs, expr.lhs.rhs, evaluate=False)
     if not isinstance(expr, (sp.Expr, Relational)):
         return None
     try:
-        expr = _postprocess(expr, word_subscripts)
+        expr = _postprocess(expr, word_subscripts, placeholders)
     except Exception:  # noqa: BLE001
         return None
     if _looks_like_junk(expr):
@@ -297,6 +518,20 @@ def assignment_value(expr: sp.Basic) -> Optional[Tuple[str, float]]:
     if abs(number.imag) > 1e-12:
         return None
     return symbol.name, float(number.real)
+
+
+def constant_value(expr: sp.Basic) -> Optional[Tuple[str, sp.Basic]]:
+    """``i = \\sqrt{-1}`` -> ``("i", I)``: a symbol given a non-real constant value."""
+    if not is_assignment(expr) or (expr.lhs.is_Symbol and expr.rhs.is_Symbol):
+        return None
+    symbol, value = (expr.lhs, expr.rhs) if expr.lhs.is_Symbol else (expr.rhs, expr.lhs)
+    try:
+        number = complex(value)
+    except (TypeError, ValueError):
+        return None
+    if abs(number.imag) <= 1e-12:
+        return None
+    return symbol.name, value
 
 
 def free_symbol_names(expr: Optional[sp.Basic]) -> List[str]:
