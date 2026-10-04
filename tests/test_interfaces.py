@@ -7,6 +7,7 @@ import os
 import shutil
 import tempfile
 import unittest
+import inspect
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -42,10 +43,16 @@ class TestPipeline(TempDirTestCase):
         result = analyze_latex(PROJECTILE, self.test_dir, source_name="projectile")
         self.assertEqual(len(result.tasks), 2)
         self.assertTrue(os.path.isfile(result.code_path))
+        self.assertTrue(os.path.isfile(result.poster_path))
+        with open(result.poster_path, encoding="utf-8") as handle:
+            poster = handle.read()
+        self.assertIn(r"\usepackage[paperwidth=841mm,paperheight=1189mm,margin=22mm]{geometry}", poster)
+        self.assertIn(r"\documentclass{article}", poster)
         with open(result.analysis_path) as handle:
             analysis = json.load(handle)
         self.assertEqual(analysis["assignments"], {"g": 9.81})
         self.assertEqual(len(analysis["tasks"]), 2)
+        self.assertEqual(analysis["generated_poster"], "generated_poster.tex")
 
         process = run_generated_code(result.code_path, timeout=300)
         self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
@@ -83,6 +90,16 @@ class TestPipeline(TempDirTestCase):
         self.assertEqual(result.tasks, [])
         self.assertTrue(result.warnings)
 
+    def test_30000_word_latex_document(self):
+        source = ("word " * 30000) + r" We plot $y = \sin(x)$."
+        result = analyze_latex(source, self.test_dir)
+        self.assertGreaterEqual(len(source.split()), 30000)
+        self.assertEqual(result.summary()["expressions_found"], 1)
+        self.assertEqual(result.tasks[0]["goal_type"], "plot")
+
+    def test_execution_timeout_is_opt_in(self):
+        self.assertIsNone(inspect.signature(run_generated_code).parameters["timeout"].default)
+
 
 class TestCLI(TempDirTestCase):
     def setUp(self):
@@ -102,6 +119,8 @@ class TestCLI(TempDirTestCase):
         self.assertIn("Computation tasks", result.output)
         code = os.path.join(out, "generated_computation.py")
         self.assertTrue(os.path.isfile(code))
+        self.assertTrue(os.path.isfile(os.path.join(out, "generated_poster.tex")))
+        self.assertIn("A0 poster (LaTeX)", result.output)
 
         # Relative paths must work from any working directory
         cwd = os.getcwd()
@@ -153,7 +172,9 @@ class TestAPI(TempDirTestCase):
         body = response.json()
         self.assertEqual(body["tasks_generated"], 2)
         self.assertEqual(body["generated_code_path"], "api_results/generated_computation.py")
+        self.assertEqual(body["poster_path"], "api_results/generated_poster.tex")
         self.assertTrue(os.path.isfile(os.path.join(self.root, "api_results", "generated_computation.py")))
+        self.assertTrue(os.path.isfile(os.path.join(self.root, body["poster_path"])))
 
         response = self.client.get("/execute/" + body["generated_code_path"])
         self.assertEqual(response.status_code, 200)
@@ -168,6 +189,9 @@ class TestAPI(TempDirTestCase):
         response = self.client.get("/download/" + plot)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers["content-type"], "image/png")
+        poster_response = self.client.get("/download/" + body["poster_path"])
+        self.assertEqual(poster_response.status_code, 200)
+        self.assertIn(r"\documentclass{article}", poster_response.text)
         # the root directory name may be used as a prefix
         self.assertEqual(self.client.get("/download/output/" + plot).status_code, 200)
 

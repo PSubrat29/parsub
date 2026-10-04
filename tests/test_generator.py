@@ -2,6 +2,7 @@
 Unit tests for the code generator and the runtime helpers it embeds.
 """
 
+import inspect
 import json
 import os
 import shutil
@@ -9,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 import sympy as sp
@@ -76,6 +78,7 @@ class TestCodeGenerator(unittest.TestCase):
         tasks = [
             make_task("x**2", "evaluate", ["x"], {"x": (-5, 5)}),
             make_task("sin(x)", "plot", ["x"], {"x": (0, 6.28)}),
+            make_task("sin(2*pi*x)", "spectral", ["x"], {"x": (0, 1)}),
             make_task("x**2 + y**2", "plot", ["x", "y"], {"x": (-5, 5), "y": (-5, 5)},
                       independent_variables=["x", "y"]),
             make_task("x**2 - 4", "solve", ["x"], {"x": (-5, 5)}, options={"solve_for": "x"}),
@@ -86,7 +89,7 @@ class TestCodeGenerator(unittest.TestCase):
         ]
         code = self.generator.generate_evaluation_code(tasks)
         compile(code, "generated.py", "exec")
-        for call in ("evaluate_task(", "plot_task(", "solve_task(", "optimize_task(", "integrate_task(",
+        for call in ("evaluate_task(", "plot_task(", "spectral_task(", "solve_task(", "optimize_task(", "integrate_task(",
                      "differentiate_task(", "series_task("):
             self.assertIn(call, code)
         self.assertIn('if __name__ == "__main__":', code)
@@ -198,6 +201,45 @@ class TestRuntime(unittest.TestCase):
         self.assertTrue(np.isnan(values[0]))
         self.assertEqual(values[1], 2.0)
 
+    def test_formula_legend_and_color_cycle(self):
+        x = sp.Symbol("x")
+        captured = {}
+
+        def capture(fig, filename, ctx=None):
+            ax = fig.axes[0]
+            captured["labels"] = [line.get_label() for line in ax.lines]
+            captured["colors"] = [line.get_color() for line in ax.lines]
+            runtime.plt.close(fig)
+
+        with patch.object(runtime, "save_plot", side_effect=capture):
+            runtime._line_plot(
+                self.ctx,
+                "legend.png",
+                np.arange(3),
+                [("$y = x$", np.arange(3), "-"), ("$z = x^2$", np.arange(3) ** 2, "--")],
+                "x",
+                "y",
+                "test",
+            )
+        self.assertEqual(captured["labels"], ["$y = x$", "$z = x^2$"])
+        self.assertEqual(len(set(captured["colors"])), 2)
+        self.assertEqual(runtime._expression_label(sp.sin(x), ["x"], "y"),
+                         "$y = %s$" % sp.latex(sp.sin(x)))
+
+    def test_spectral_task_finds_known_frequency(self):
+        t = sp.Symbol("t")
+        result = runtime.spectral_task(
+            self.ctx,
+            1,
+            sp.sin(2 * sp.pi * 5 * t),
+            ["t"],
+            ranges={"t": (0, 1)},
+            points=1024,
+        )
+        self.assertAlmostEqual(result["dominant_frequency"], 5.0, places=1)
+        self.assertAlmostEqual(result["dominant_amplitude"], 1.0, delta=0.03)
+        self.assertTrue(os.path.isfile(os.path.join(self.ctx.data_dir, "task_1_spectrum.csv")))
+
     def test_save_data_formats(self):
         for name in ("a.csv", "a.tsv", "a.xlsx", "a.json"):
             path = runtime.save_data({"x": np.arange(3), "y": np.arange(3) ** 2}, name, ctx=self.ctx)
@@ -213,6 +255,9 @@ class TestRuntime(unittest.TestCase):
         self.assertTrue(summary["identity_holds_numerically"])
         summary = runtime.verify_task(self.ctx, 2, sp.sin(x), sp.cos(x), ["x"], ranges={"x": (-3, 3)})
         self.assertFalse(summary["identity_holds_numerically"])
+
+    def test_symbolic_attempt_is_unlimited_by_default(self):
+        self.assertIsNone(inspect.signature(runtime.attempt).parameters["seconds"].default)
 
     @unittest.skipUnless(hasattr(__import__("signal"), "SIGALRM"), "time limits need SIGALRM")
     def test_time_limit(self):

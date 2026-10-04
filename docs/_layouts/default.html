@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ page.title | default: site.title }} · {{ site.title }}</title>
+    <meta name="description" content="{{ page.description | default: site.description | escape }}">
+    {% seo %}
+    <style>
+      :root { color-scheme: light; --ink: #17253c; --muted: #53657c; --line: #dce4ee; --accent: #1769aa; }
+      * { box-sizing: border-box; }
+      body { margin: 0; color: var(--ink); background: #f6f8fb; font: 16px/1.65 system-ui, sans-serif; }
+      .site-shell { display: grid; grid-template-columns: 260px minmax(0, 1fr); min-height: 100vh; }
+      .site-sidebar { position: sticky; top: 0; height: 100vh; padding: 30px 22px; background: #fff; border-right: 1px solid var(--line); }
+      .site-brand { display: block; margin: 0 0 6px; color: var(--ink); font-size: 1.5rem; font-weight: 750; text-decoration: none; }
+      .site-description { margin: 0 0 24px; color: var(--muted); font-size: .9rem; }
+      .site-nav { display: grid; gap: 5px; }
+      .site-nav a { padding: 8px 11px; border-radius: 7px; color: var(--muted); text-decoration: none; }
+      .site-nav a:hover, .site-nav a[aria-current="page"] { color: var(--accent); background: #edf5fc; }
+      main { width: min(100%, 1050px); padding: 44px clamp(22px, 6vw, 76px); background: #fff; }
+      main img { max-width: 100%; height: auto; }
+      main pre { overflow: auto; padding: 16px; border-radius: 8px; background: #f2f5f8; }
+      main table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
+      main th, main td { padding: 8px 12px; border: 1px solid var(--line); }
+      @media (max-width: 760px) {
+        .site-shell { grid-template-columns: 1fr; }
+        .site-sidebar { position: static; height: auto; padding: 18px 20px; border-right: 0; border-bottom: 1px solid var(--line); }
+        .site-description { margin-bottom: 10px; }
+        .site-nav { display: flex; overflow-x: auto; }
+        .site-nav a { flex: 0 0 auto; }
+        main { padding-top: 26px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="site-shell">
+      <aside class="site-sidebar" aria-label="Site navigation">
+        <a class="site-brand" href="{{ '/' | relative_url }}">{{ site.title }}</a>
+        <p class="site-description">{{ site.description }}</p>
+        <nav class="site-nav" aria-label="Documentation">
+          <a href="{{ '/index.html' | relative_url }}">Documentation home</a>
+          <a href="{{ '/user_guide.html' | relative_url }}">User guide</a>
+          <a href="{{ '/api_reference.html' | relative_url }}">API reference</a>
+          <a href="{{ '/validation.html' | relative_url }}">Validation</a>
+          <a href="{{ '/docker.html' | relative_url }}">Docker</a>
+          <a href="{{ '/development_guide.html' | relative_url }}">Development</a>
+          <a href="{{ '/changelog.html' | relative_url }}">Changelog</a>
+        </nav>
+      </aside>
+      <main id="main-content">{{ content }}</main>
+    </div>
+  </body>
+</html>

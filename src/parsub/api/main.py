@@ -47,6 +47,7 @@ class AnalysisResponse(BaseModel):
     tasks_generated: int
     output_dir: Optional[str] = None
     generated_code_path: Optional[str] = None
+    poster_path: Optional[str] = None
     analysis_path: Optional[str] = None
     extracted_info: Optional[Dict[str, Any]] = None
     warnings: List[str] = []
@@ -54,7 +55,9 @@ class AnalysisResponse(BaseModel):
 
 class RunInput(BaseModel):
     code_path: str = Field(..., description="Path of a generated script, relative to the output root")
-    timeout: float = Field(600, gt=0, le=3600, description="Time limit in seconds")
+    timeout: Optional[float] = Field(
+        None, gt=0, description="Optional overall time limit in seconds; omit for unlimited execution"
+    )
 
 
 class ExecutionResponse(BaseModel):
@@ -114,6 +117,7 @@ def _analysis_response(result: AnalysisResult, message: str) -> AnalysisResponse
         tasks_generated=summary["tasks_generated"],
         output_dir=_relative(result.output_dir) if Path(result.output_dir).resolve() != output_root() else ".",
         generated_code_path=_relative(result.code_path),
+        poster_path=_relative(result.poster_path) if result.poster_path else None,
         analysis_path=_relative(result.analysis_path),
         extracted_info={
             "goals": summary["goals"],
@@ -188,6 +192,8 @@ def run_endpoint(input_data: RunInput):
     try:
         result = run_generated_code(str(script), str(out_dir), timeout=input_data.timeout)
     except subprocess.TimeoutExpired:
+        if input_data.timeout is None:
+            raise HTTPException(status_code=504, detail="Execution timed out")
         raise HTTPException(status_code=504, detail=f"Execution timed out after {input_data.timeout:g} s")
     summary = read_run_summary(str(out_dir)) or {}
     files: List[str] = []

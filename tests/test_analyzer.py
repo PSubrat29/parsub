@@ -61,6 +61,15 @@ class TestExpressionAnalyzer(unittest.TestCase):
         self.assertEqual(tasks[0]["goal_type"], "plot")
         self.assertEqual(tasks[0]["expected_output_type"], "array")
 
+    def test_analyze_spectral_request(self):
+        tasks = analyze_expressions(
+            [{"sympy_expr": sp.sin(2 * sp.pi * 5 * sp.Symbol("t"))}],
+            {"goals": ["we want a spectral analysis"]},
+        )
+        self.assertEqual(tasks[0]["goal_type"], "spectral")
+        self.assertEqual(tasks[0]["independent_variables"], ["t"])
+        self.assertEqual(tasks[0]["suggested_sampling"]["points"], 1024)
+
     def test_definition_uses_right_hand_side(self):
         """For y = f(x) the right-hand side is computed and labelled y."""
         tasks = analyze_latex(r"$y = x^2 + 1$")

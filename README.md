@@ -36,15 +36,20 @@ paper.tex ──parse──► expressions ──analyze──► tasks ──ge
   (see [Validation](#-validation-on-a-real-paper)).
 - **Goal recognition** – reads the surrounding prose ("we want to plot", "find the maximum", "solve
   for x", ...) to choose between *evaluate*, *plot*, *solve*, *optimize*, *integrate*,
-  *differentiate*, *series*, *verify* (numerical check of identities) and *symbolic*.
+  *differentiate*, *series*, *spectral* (windowed Fourier amplitude spectrum), *verify* (numerical
+  check of identities) and *symbolic*.
 - **Parameter inference** – decides which variables are swept and which are held fixed, with sensible
   ranges and default values; values stated in the text (e.g. `$g = 9.81$`) are used automatically.
 - **Self-contained code generation** – one small, editable function per task plus an embedded helper
   library (NumPy, SciPy, SymPy, Matplotlib, pandas). Integrals and infinite sums are evaluated
   numerically when no closed form is needed.
-- **Robust execution** – every task runs in isolation with a time limit, so one hard formula never
-  blocks the rest; a `summary.json` records what succeeded.
-- **High-quality output** – 300 DPI PNG plots and CSV/TSV/Excel/JSON data.
+- **Robust execution** – tasks are isolated and errors are recorded in `summary.json`; execution is
+  unlimited by default, with optional overall and per-task time limits.
+- **High-quality output** – color-cycled plots with concise mathematical legends, 400 DPI PNG output,
+  and CSV/TSV/Excel/JSON data.
+- **Conference poster source** – each manuscript analysis also creates an editable, one-page A0
+  portrait `generated_poster.tex` with author metadata, selected equations, analysis summaries, and
+  embedded model curves when a parsed expression can be sampled safely.
 - **Privacy-first** – everything runs locally; no data leaves your machine.
 - **CLI, Python API, REST API and Docker image**, covered by an automated test suite.
 
@@ -55,6 +60,16 @@ Requires Python 3.9 or newer.
 ```bash
 pip install parsub
 ```
+
+Optional scientific libraries for custom Python extensions can be installed with:
+
+```bash
+pip install "parsub[science]"
+```
+
+This extra installs Xarray, Astropy, NetworkX, GeoPandas, QuTiP, Uproot and
+TensorNetwork; it does not add automatic LaTeX adapters for those libraries.
+Kwant, PyDSTool and SageMath need separate platform-specific installations.
 
 From source (for development):
 
@@ -80,6 +95,15 @@ parsub run ./results/generated_computation.py
 parsub analyze examples/sample.tex -o ./results --run
 ```
 
+`parsub analyze` writes `generated_poster.tex` alongside the analysis and computation outputs.
+Compile it with a LaTeX distribution, for example:
+
+```bash
+pdflatex -interaction=nonstopmode -halt-on-error generated_poster.tex
+```
+
+Review scientific content, source metadata, and conference requirements before presenting it.
+
 `parsub --help` lists all commands and options (`analyze`, `run`, `demo`, `version`).
 
 ### Python API
@@ -87,8 +111,9 @@ parsub analyze examples/sample.tex -o ./results --run
 ```python
 import parsub
 
-# One call: parse, analyze and write generated_computation.py + analysis.json
+# One call: parse, analyze, and write the computation script, analysis, and A0 poster TeX
 result = parsub.analyze_latex(r"We plot $y = \sin(x) e^{-x/5}$", output_dir="./output")
+print(result.poster_path)
 for task in result.tasks:
     print(task["goal_type"], "-", task["description"])
 
@@ -160,7 +185,16 @@ output/
     └── summary.json             # status of every task
 ```
 
-The generated script accepts `--output-dir DIR`, `--timeout SECONDS` (per task) and `--tasks 1,3`.
+The generated script accepts `--output-dir DIR`, `--timeout SECONDS` (per task; unlimited by default)
+and `--tasks 1,3`.
+
+The parser has no 30,000-word limit. REST uploads are limited to 5 MB; local files
+are limited by available memory. Domain libraries such as Xarray, Astropy,
+NetworkX, GeoPandas, QuTiP, Kwant, Uproot, PyDSTool, SageMath and TensorNetwork
+are not automatically wired into ParSub's LaTeX-to-computation pipeline; see
+the [user guide](https://psubrat29.github.io/parsub/docs/user_guide.html) for
+platform and customization notes. Generated figures are styled for clarity,
+but still require scientific validation and journal-specific review.
 
 ## 📚 Documentation
 
@@ -210,7 +244,8 @@ pytest tests/test_parser.py # one module
 
 - **Local processing** – parsing, analysis, code generation and execution happen on your machine.
 - **No telemetry** – nothing is sent to external servers.
-- **Isolated execution** – generated code runs in a separate Python process with time limits.
+- **Isolated execution** – generated code runs in a separate Python process; optional time limits
+  can be set explicitly.
   It is ordinary Python, so review it before running code generated from documents you do not trust.
 - **File access control** – the REST API only reads and writes inside its output root and only runs
   scripts that ParSub generated there.

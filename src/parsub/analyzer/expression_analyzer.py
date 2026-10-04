@@ -18,7 +18,7 @@ from sympy.core.relational import Relational
 from parsub.core.parameters import INDEPENDENT_PREFERENCE, base_name, parameter_hint
 
 GOAL_TYPES = (
-    "evaluate", "plot", "solve", "optimize", "integrate", "differentiate",
+    "evaluate", "plot", "spectral", "solve", "optimize", "integrate", "differentiate",
     "series", "verify", "symbolic",
 )
 
@@ -29,17 +29,19 @@ GOAL_KEYWORDS: Dict[str, List[str]] = {
     "integrate": [r"\bintegrat\w*", r"\bintegrals?\b", r"\barea under\b"],
     "differentiate": [r"\bdifferentiat\w*", r"\bderivatives?\b", r"\brate of change\b", r"\bgradients?\b"],
     "series": [r"\bseries\s+expansion\b", r"\bexpand\w*", r"\btaylor\b", r"\bmaclaurin\b", r"\bapproximat\w*"],
+    "spectral": [r"\bspectral\b", r"\bfourier\b", r"\bfft\b", r"\bfrequency\s+(?:analysis|spectrum)\b"],
     "plot": [r"\bplot\w*", r"\bgraph\w*", r"\bvisuali[sz]\w*", r"\bdraw\w*", r"\bsketch\w*"],
     "evaluate": [r"\bevaluat\w*", r"\bcomput\w*", r"\bcalculat\w*", r"\bdetermin\w*",
                  r"\bfind\b(?!\s+(?:the\s+|a\s+|its\s+)?(?:max|min|optim|extrem|roots?|zeros?|solutions?)\w*)"],
 }
 # Tie-break order when several goals are mentioned equally often
-GOAL_PRIORITY = ["solve", "optimize", "integrate", "differentiate", "series", "plot", "evaluate"]
+GOAL_PRIORITY = ["solve", "optimize", "integrate", "differentiate", "series", "spectral", "plot", "evaluate"]
 
 DEFAULT_POINTS = {
     "evaluate": 100,
     "plot": 200,
-    "plot2d": 40,
+    "plot2d": 100,
+    "spectral": 1024,
     "solve": 400,
     "optimize": 1000,
     "integrate": 200,
@@ -445,7 +447,7 @@ class ExpressionAnalyzer:
             keyword_goal = None if has_calculus else "evaluate"
         if keyword_goal in ("series",) and target.has(sp.Sum):
             keyword_goal = None  # already a series: evaluate it instead
-        if keyword_goal in ("plot", "optimize", "integrate", "differentiate", "series") and not target.free_symbols:
+        if keyword_goal in ("plot", "spectral", "optimize", "integrate", "differentiate", "series") and not target.free_symbols:
             keyword_goal = "evaluate"
         if keyword_goal is not None:
             return keyword_goal
@@ -601,7 +603,7 @@ class ExpressionAnalyzer:
             return "symbolic"
         if not variables:
             return "scalar"
-        if goal_type in ("plot", "verify", "optimize"):
+        if goal_type in ("plot", "spectral", "verify", "optimize"):
             return "array"
         return "function"
 
@@ -616,7 +618,8 @@ class ExpressionAnalyzer:
         if title:
             subject = title
         verbs = {
-            "evaluate": "Evaluate", "plot": "Plot", "solve": "Solve", "optimize": "Find extrema of",
+            "evaluate": "Evaluate", "plot": "Plot", "spectral": "Analyze the spectrum of",
+            "solve": "Solve", "optimize": "Find extrema of",
             "integrate": "Integrate", "differentiate": "Differentiate", "series": "Series-expand",
             "verify": "Numerically verify", "symbolic": "Record symbolic relation",
         }

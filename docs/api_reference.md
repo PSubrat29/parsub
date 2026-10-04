@@ -11,8 +11,9 @@ For the command line and the REST API see the [User Guide](user_guide.md).
 The package version string, e.g. `"0.2.1"` (also shown by `parsub --version`).
 
 #### `analyze_latex(latex_source, output_dir="./output", source_name=None) -> AnalysisResult`
-Parse, analyze and generate code for a LaTeX string. Writes `generated_computation.py` and
-`analysis.json` into `output_dir`. See [`AnalysisResult`](#analysisresult).
+Parse, analyze and generate code for a LaTeX string. Writes `generated_computation.py`,
+`analysis.json`, and `generated_poster.tex` into `output_dir`. See
+[`AnalysisResult`](#analysisresult).
 
 #### `analyze_latex_file(latex_file, output_dir="./output") -> str`
 Same for a file; returns the path of the generated Python script.
@@ -23,10 +24,11 @@ from parsub import analyze_latex_file
 code_file = analyze_latex_file("paper.tex", "./results")
 ```
 
-#### `run_generated_code(code_path, output_dir=None, timeout=600, capture_output=True) -> subprocess.CompletedProcess`
+#### `run_generated_code(code_path, output_dir=None, timeout=None, capture_output=True) -> subprocess.CompletedProcess`
 Run a generated script in a separate Python process. Results are written to `output_dir`
-(default: the script's directory). Raises `FileNotFoundError` for a missing script and
-`subprocess.TimeoutExpired` when `timeout` seconds are exceeded.
+(default: the script's directory). Execution is unlimited by default. Set `timeout` to opt into
+an overall limit. Raises `FileNotFoundError` for a missing script and
+`subprocess.TimeoutExpired` when an explicit limit is exceeded.
 
 ## Pipeline Module
 
@@ -37,13 +39,14 @@ Returned by `analyze_latex`:
 - `parsed`: the parser result (see `parse_latex_source`)
 - `tasks`: list of task dictionaries (see `analyze_expressions`)
 - `code_path`, `analysis_path`, `output_dir`: paths of the written files
+- `poster_path`: path of the editable, one-page A0 portrait LaTeX poster
 - `warnings`: list of messages (e.g. no expressions found)
 - `expressions`: shortcut for `parsed["expressions"]`
 - `summary()`: JSON-friendly overview (counts, goals, methods, parameters, paths, warnings)
 
 #### `analyze_latex(...)`, `analyze_latex_file(...)`, `run_generated_code(..., task_timeout=None)`
-The implementations behind the top-level functions. `task_timeout` sets the per-task time limit
-of the generated script.
+The implementations behind the top-level functions. `task_timeout` sets the optional per-task
+limit of the generated script (enforced only on platforms that support `SIGALRM`).
 
 #### `read_run_summary(output_dir) -> dict | None`
 Load `data/summary.json` written by a generated script.

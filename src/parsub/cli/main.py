@@ -81,6 +81,8 @@ def _print_analysis(result: AnalysisResult, source: str, verbose: bool) -> None:
     console.print(f"  Computation tasks:     {summary['tasks_generated']}")
     console.print(f"  Generated code:        {result.code_path}")
     console.print(f"  Analysis details:      {result.analysis_path}")
+    if result.poster_path:
+        console.print(f"  A0 poster (LaTeX):     {result.poster_path}")
     for warning in result.warnings:
         console.print(f"[yellow]  Warning: {warning}[/yellow]")
 
@@ -104,7 +106,7 @@ def _print_analysis(result: AnalysisResult, source: str, verbose: bool) -> None:
         console.print(f"  Parameters: {names or '-'}")
 
 
-def _run(code_file: str, output_dir: Optional[str], timeout: float, task_timeout: Optional[float]) -> int:
+def _run(code_file: str, output_dir: Optional[str], timeout: Optional[float], task_timeout: Optional[float]) -> int:
     """Run a generated script, streaming its output. Returns the exit code."""
     code_path = Path(code_file)
     if not code_path.is_file():
@@ -117,7 +119,8 @@ def _run(code_file: str, output_dir: Optional[str], timeout: float, task_timeout
             str(code_path), out_dir, timeout=timeout, capture_output=False, task_timeout=task_timeout
         )
     except subprocess.TimeoutExpired:
-        console.print(f"[red]Error: Code execution timed out ({timeout:g} s).[/red]")
+        limit = f" ({timeout:g} s)" if timeout is not None else ""
+        console.print(f"[red]Error: Code execution timed out{limit}.[/red]")
         return 1
     except OSError as exc:
         console.print(f"[red]Error running code: {exc}[/red]")
@@ -144,7 +147,7 @@ def analyze(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
     show_code: bool = typer.Option(False, "--show-code", help="Print the generated Python code"),
     run_code: bool = typer.Option(False, "--run", help="Run the generated code immediately"),
-    timeout: float = typer.Option(600, "--timeout", help="Time limit in seconds when using --run"),
+    timeout: Optional[float] = typer.Option(None, "--timeout", help="Optional overall time limit in seconds"),
 ):
     """
     Analyze a LaTeX source file and generate Python code for numerical evaluation.
@@ -184,7 +187,7 @@ def run(
     output_dir: Optional[str] = typer.Option(
         None, "--output-dir", "-o", help="Directory where results will be saved [default: the script's directory]"
     ),
-    timeout: float = typer.Option(600, "--timeout", help="Overall time limit in seconds"),
+    timeout: Optional[float] = typer.Option(None, "--timeout", help="Optional overall time limit in seconds"),
     task_timeout: Optional[float] = typer.Option(None, "--task-timeout", help="Time limit per task in seconds"),
 ):
     """
@@ -204,7 +207,7 @@ def demo(
         result = analyze_latex(DEMO_LATEX, output_dir, source_name="demo: projectile motion")
     _print_analysis(result, "built-in projectile motion example", verbose=True)
     if run_code:
-        raise typer.Exit(_run(result.code_path, output_dir, 600, None))
+        raise typer.Exit(_run(result.code_path, output_dir, None, None))
     console.print("\nTo run the demo:")
     console.print(f"  parsub run {result.code_path}")
 

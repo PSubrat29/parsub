@@ -4,6 +4,7 @@
 title: ParSub
 description: Turn the mathematics in LaTeX documents into runnable Python computations, plots and data.
 theme: jekyll-theme-cayman
+documentation_root: ""
 
 plugins:
   - jekyll-relative-links

@@ -24,7 +24,7 @@ def analyze_latex_file(latex_file, output_dir="./output"):
     return _analyze_latex_file(latex_file, output_dir)
 
 
-def run_generated_code(code_path, output_dir=None, timeout=600, capture_output=True):
+def run_generated_code(code_path, output_dir=None, timeout=None, capture_output=True):
     """Run a generated computation script. See :func:`parsub.core.pipeline.run_generated_code`."""
     from parsub.core.pipeline import run_generated_code as _run_generated_code
 

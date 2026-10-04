@@ -39,6 +39,14 @@ ParSub works in five stages:
 4. **Code generation**: write a self-contained Python script
 5. **Execution**: run the script to produce plots and data
 
+Every analysis also writes `generated_poster.tex`, an editable, one-page A0
+portrait poster source. It carries through title, author and address metadata,
+uses the manuscript abstract when available, and summarizes extracted goals,
+methods, equations, and computational tasks. Numerically sampled expressions
+may be included as embedded TikZ curves; these are labeled as illustrative
+model curves, not experimental data. Review the scientific content and
+conference-specific requirements before presenting the poster.
+
 ## Command Line Interface
 
 ```bash
@@ -60,7 +68,7 @@ Options:
   -v, --verbose          Verbose output
   --show-code            Print the generated Python code
   --run                  Run the generated code immediately
-  --timeout FLOAT        Time limit in seconds when using --run  [default: 600]
+  --timeout FLOAT        Optional overall time limit in seconds [default: unlimited]
   --help                 Show this message and exit.
 ```
 
@@ -70,7 +78,10 @@ parsub analyze paper.tex --output-dir ./results --verbose
 ```
 
 The command prints a table of the computation tasks and writes
-`generated_computation.py` and `analysis.json` to the output directory.
+`generated_computation.py`, `analysis.json`, and `generated_poster.tex` to the
+output directory. Compile the poster source with a LaTeX installation, for
+example `pdflatex generated_poster.tex`. Manuscript-specific macros and
+conference templates may need manual adjustments.
 
 ### run
 
@@ -84,8 +95,8 @@ Arguments:
 
 Options:
   -o, --output-dir TEXT  Directory where results will be saved [default: the script's directory]
-  --timeout FLOAT        Overall time limit in seconds  [default: 600]
-  --task-timeout FLOAT   Time limit per task in seconds
+  --timeout FLOAT        Optional overall time limit in seconds [default: unlimited]
+  --task-timeout FLOAT   Optional time limit per task in seconds
   --help                 Show this message and exit.
 ```
 
@@ -95,6 +106,45 @@ parsub run ./results/generated_computation.py
 ```
 
 The exit code is 0 when every task succeeded and 1 otherwise.
+Runs have no time limit by default. Use `--timeout` and/or `--task-timeout` to
+set explicit limits; the generated script also accepts `--timeout 0` for an
+unlimited per-task run.
+
+### Spectral analysis
+
+Describe the goal as a spectral/Fourier analysis, for example:
+
+```latex
+We perform spectral analysis of $y(t) = \sin(2\pi\,5t)$.
+```
+
+The generated script samples the first independent variable uniformly,
+computes a Hann-windowed one-sided amplitude spectrum, and writes frequency
+and amplitude columns to CSV alongside a plot. This assumes a real-valued
+signal and a uniformly spaced sample grid; inspect the ranges and sampling
+resolution in the generated script before using scientific results.
+
+### Document size and scientific packages
+
+The parser has no 30,000-word limit. The REST file-upload endpoint accepts
+LaTeX files up to 5 MB; command-line and Python inputs are limited by available
+memory rather than a word-count setting.
+
+NumPy, SciPy, SymPy, Matplotlib and pandas are part of ParSub's runtime.
+Xarray, Astropy, NetworkX, GeoPandas, QuTiP, Kwant, Uproot, PyDSTool, SageMath
+and TensorNetwork have different installation and platform requirements.
+The portable subset can be installed with `pip install "parsub[science]"`.
+That extra adds Xarray, Astropy, NetworkX, GeoPandas, QuTiP, Uproot and
+TensorNetwork to the environment.
+ParSub does not currently provide automatic domain-specific adapters for
+those libraries: use them in reviewed, custom Python code or task functions.
+Kwant, PyDSTool and SageMath commonly require platform-specific or managed
+environment installation rather than a portable `pip install parsub` extra.
+
+Automatic plotting styles and 400-DPI output are presentation aids, not
+scientific validation or a guarantee of journal acceptance. Verify equations,
+units, parameter choices, numerical convergence and figure requirements
+against the target journal before publication.
 
 ### demo
 
@@ -157,6 +207,7 @@ import parsub
 result = parsub.analyze_latex(latex_source, output_dir="./output", source_name="paper.tex")
 print(result.code_path)        # ./output/generated_computation.py
 print(result.analysis_path)    # ./output/analysis.json
+print(result.poster_path)      # ./output/generated_poster.tex
 print(result.summary())        # counts, goals, methods, parameters, warnings
 for task in result.tasks:
     print(task["goal_type"], task["description"])
@@ -259,6 +310,7 @@ sub-directories of that root, and all returned paths are relative to it.
   "tasks_generated": 1,
   "output_dir": "api_results",
   "generated_code_path": "api_results/generated_computation.py",
+  "poster_path": "api_results/generated_poster.tex",
   "analysis_path": "api_results/analysis.json",
   "extracted_info": {
     "goals": [],
@@ -279,6 +331,8 @@ sub-directories of that root, and all returned paths are relative to it.
 
 Multipart form with `file` (a `.tex`, `.latex` or `.ltx` file, UTF-8, at most 5 MB)
 and an optional `output_dir` field. The response has the same format as `/analyze`.
+The `poster_path` returned from `/analyze` or `/upload` can be downloaded using
+`GET /download/{poster_path}`.
 
 ```bash
 curl -F "file=@paper.tex" -F "output_dir=paper" http://localhost:8000/upload
@@ -287,6 +341,7 @@ curl -F "file=@paper.tex" -F "output_dir=paper" http://localhost:8000/upload
 ### POST /run
 
 Runs a script generated by ParSub inside the output root and lists the files it produced.
+Execution is unlimited by default. Add a positive `timeout` in seconds to opt into an overall limit.
 
 ```json
 {"code_path": "api_results/generated_computation.py", "timeout": 600}
@@ -328,7 +383,7 @@ Downloads a generated file, e.g. `GET /download/api_results/plots/task_1_surface
 | 404 | File not found |
 | 413 | Upload too large |
 | 422 | Request body does not match the schema |
-| 504 | `/run` exceeded its time limit |
+| 504 | `/run` exceeded an explicitly configured time limit |
 
 ### API security notes
 
@@ -437,8 +492,11 @@ task, so it runs without ParSub installed and is easy to edit.
 
 ### Stage 5: Execution
 
-Every task runs in isolation with a time limit. Results and failures are recorded in
+Every task runs in isolation. Execution is unlimited by default; an explicitly set per-task limit
+is enforced on platforms that support `SIGALRM`. Results and failures are recorded in
 `data/summary.json`; one failing task never stops the others.
+Unlimited jobs can consume CPU and memory indefinitely. Set an overall `--timeout` for untrusted
+inputs or server workloads; the overall process limit also works on Windows.
 
 ## The Generated Script
 
@@ -446,7 +504,7 @@ Every task runs in isolation with a time limit. Results and failures are recorde
 python generated_computation.py                    # all tasks, results next to the script
 python generated_computation.py --output-dir out   # write somewhere else
 python generated_computation.py --tasks 1,3        # only some tasks
-python generated_computation.py --timeout 300      # per-task time limit (seconds, 0 = none)
+python generated_computation.py --timeout 300      # optional per-task time limit (seconds, 0 = none)
 ```
 
 The output directory can also be set with the `PARSUB_OUTPUT_DIR` environment variable.
@@ -476,15 +534,16 @@ generated script to switch formats.
 
 ### High-resolution output
 
-Plots are saved at 300 DPI. To change this, edit in the generated script:
+Plots are saved at 400 DPI. To change this, edit the generated script:
 ```python
-plt.rcParams["savefig.dpi"] = 300
+PLOT_DPI = 600
+plt.rcParams["savefig.dpi"] = PLOT_DPI
 ```
 
 ### Expressions NumPy cannot evaluate
 
 Integrals, infinite sums and products are evaluated point by point with SymPy/mpmath; sampling
-is automatically reduced (at most 120 points per curve, 25×25 per surface) to keep run times
+is automatically reduced (at most 120 points per curve, 80×80 per pointwise surface) to keep run times
 reasonable. Results that are not real numbers are stored as empty cells (NaN).
 
 ### Extending ParSub
@@ -509,7 +568,7 @@ reasonable. Results that are not real numbers are stored as empty cells (NaN).
 ### A task failed
 - `data/summary.json` contains the error message and traceback of every task.
 - Run a single task with `python generated_computation.py --tasks N`.
-- Increase the per-task time limit with `--timeout`.
+- Add `--task-timeout SECONDS` for a per-task limit on platforms that support `SIGALRM`.
 
 ### Plots look empty
 - The function may not be real-valued in the chosen range (e.g. `sqrt(x)` for `x < 0`);

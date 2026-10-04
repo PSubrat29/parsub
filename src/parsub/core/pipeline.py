@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 from parsub import __version__
 from parsub.analyzer.expression_analyzer import analyze_expressions
 from parsub.generator.code_generator import generate_code_from_tasks
+from parsub.generator.poster_generator import generate_poster_tex
 from parsub.parser.latex_parser import parse_latex_source
 
 ANALYSIS_FILENAME = "analysis.json"
@@ -30,6 +31,7 @@ class AnalysisResult:
     analysis_path: str
     output_dir: str
     warnings: List[str] = field(default_factory=list)
+    poster_path: Optional[str] = None
 
     @property
     def expressions(self) -> List[Dict[str, Any]]:
@@ -46,6 +48,7 @@ class AnalysisResult:
             "parameters": self.parsed.get("parameters", []),
             "code_path": self.code_path,
             "analysis_path": self.analysis_path,
+            "poster_path": self.poster_path,
             "warnings": list(self.warnings),
         }
 
@@ -59,7 +62,8 @@ def analyze_latex(latex_source: str, output_dir: str = "./output", source_name: 
     """
     Run the full analysis on a LaTeX string.
 
-    Writes ``generated_computation.py`` and ``analysis.json`` into ``output_dir``.
+    Writes the computation script, analysis summary and an editable A0 poster
+    source file into ``output_dir``.
     """
     parsed = parse_latex_source(latex_source)
     context = {
@@ -71,6 +75,7 @@ def analyze_latex(latex_source: str, output_dir: str = "./output", source_name: 
     }
     tasks = analyze_expressions(parsed.get("expressions", []), context)
     code_path = generate_code_from_tasks(tasks, output_dir, source_name=source_name)
+    poster_path = generate_poster_tex(parsed, tasks, output_dir, source_name=source_name)
 
     warnings: List[str] = []
     if parsed.get("parse_error"):
@@ -93,13 +98,14 @@ def analyze_latex(latex_source: str, output_dir: str = "./output", source_name: 
         "expressions": [_expression_record(expr) for expr in parsed.get("expressions", [])],
         "tasks": tasks,
         "generated_code": os.path.basename(code_path),
+        "generated_poster": os.path.basename(poster_path),
         "warnings": warnings,
     }
     analysis_path = os.path.join(output_dir, ANALYSIS_FILENAME)
     with open(analysis_path, "w", encoding="utf-8") as handle:
         json.dump(analysis, handle, indent=2, default=str)
 
-    return AnalysisResult(parsed, tasks, code_path, analysis_path, output_dir, warnings)
+    return AnalysisResult(parsed, tasks, code_path, analysis_path, output_dir, warnings, poster_path)
 
 
 def analyze_latex_file(latex_file: str, output_dir: str = "./output") -> str:
@@ -109,14 +115,14 @@ def analyze_latex_file(latex_file: str, output_dir: str = "./output") -> str:
     return analyze_latex(latex_source, output_dir, source_name=os.path.basename(latex_file)).code_path
 
 
-def run_generated_code(code_path: str, output_dir: Optional[str] = None, timeout: Optional[float] = 600,
+def run_generated_code(code_path: str, output_dir: Optional[str] = None, timeout: Optional[float] = None,
                        capture_output: bool = True, task_timeout: Optional[float] = None) -> subprocess.CompletedProcess:
     """
     Execute a generated script in a separate Python process.
 
     Results go to ``output_dir`` (default: the directory containing the script).
-    Raises ``FileNotFoundError`` if the script does not exist and
-    ``subprocess.TimeoutExpired`` if it runs longer than ``timeout`` seconds.
+    Raises ``FileNotFoundError`` if the script does not exist.  Execution is
+    unlimited by default; set ``timeout`` or ``task_timeout`` to opt into limits.
     """
     script = os.path.abspath(code_path)
     if not os.path.isfile(script):

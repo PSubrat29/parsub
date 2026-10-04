@@ -37,14 +37,17 @@ from scipy import integrate as sci_integrate  # noqa: E402
 from scipy import optimize  # noqa: E402
 
 warnings.filterwarnings("ignore")
+PLOT_DPI = 400
 plt.rcParams["figure.dpi"] = 100
-plt.rcParams["savefig.dpi"] = 300  # publication quality output
+plt.rcParams["savefig.dpi"] = PLOT_DPI
 plt.rcParams["font.size"] = 10
+plt.rcParams["axes.prop_cycle"] = matplotlib.cycler(color=plt.get_cmap("tab10").colors)
+plt.rcParams["mathtext.fontset"] = "stix"
+plt.rcParams["font.family"] = "STIXGeneral"
 
 POINTWISE_LIMIT_1D = 120  # max samples when every point needs a SymPy evalf
-POINTWISE_LIMIT_2D = 25   # max samples per axis for pointwise surface plots
+POINTWISE_LIMIT_2D = 80   # max samples per axis for pointwise surface plots
 POINTWISE_LIMIT_VERIFY = 40  # identity checks need fewer (expensive) samples
-SYMBOLIC_TIME_LIMIT = 20  # seconds allowed for symbolic solve/integrate/simplify
 
 
 # --------------------------------------------------------------------- output
@@ -96,7 +99,7 @@ def save_plot(fig, filename, output_dir="./output/plots", ctx=None):
         output_dir = ctx.plots_dir
     os.makedirs(output_dir, exist_ok=True)
     filepath = os.path.join(output_dir, filename)
-    fig.savefig(filepath, dpi=300, bbox_inches="tight")
+    fig.savefig(filepath, dpi=PLOT_DPI, bbox_inches="tight")
     plt.close(fig)
     if ctx is not None:
         ctx.files.append(ctx.relative(filepath))
@@ -176,7 +179,7 @@ def time_limit(seconds):
             signal.setitimer(signal.ITIMER_REAL, max(remaining, 0.001))
 
 
-def attempt(func, seconds=SYMBOLIC_TIME_LIMIT):
+def attempt(func, seconds=None):
     """Run ``func()``; return ``(True, result)`` or ``(False, error message)``."""
     try:
         with time_limit(seconds):
@@ -272,7 +275,7 @@ def lambdify_expr(expr, variables, fixed=None):
             number = value.evalf(15)
             if not number.is_number or number.has(sp.Sum, sp.Integral, sp.Product):
                 # e.g. a series of 0**(2n + a) terms: let SymPy simplify it first
-                ok, simplified = attempt(lambda: value.doit(), seconds=3)
+                ok, simplified = attempt(lambda: value.doit())
                 number = simplified.evalf(15) if ok else number
             return complex(number)
         except Exception:  # noqa: BLE001
@@ -330,19 +333,44 @@ def _fixed_note(fixed):
     return " (" + ", ".join("%s=%g" % (name, value) for name, value in fixed.items()) + ")"
 
 
+def _math_symbol(name):
+    return "$%s$" % sp.latex(sp.Symbol(str(name)))
+
+
+def _expression_label(expr, variables, label=None):
+    """Format a plotted function as a concise, mathematically exact legend entry."""
+    left = sp.latex(sp.Symbol(str(label))) if label else "f(%s)" % ", ".join(
+        sp.latex(sp.Symbol(name)) for name in variables
+    )
+    return "$%s = %s$" % (left, sp.latex(expr))
+
+
+def _fixed_math_title(title, fixed):
+    if not fixed or not title.startswith("$") or not title.endswith("$"):
+        return title
+    values = r",\;".join(
+        "%s = %s" % (sp.latex(sp.Symbol(name)), sp.latex(sp.Float(value)))
+        for name, value in fixed.items()
+    )
+    return title[:-1] + r"\quad\left(" + values + r"\right)$"
+
+
 def _line_plot(ctx, filename, x, series, xlabel, ylabel, title, markers=None):
     fig, ax = plt.subplots(figsize=(10, 6))
-    for label, values, style in series:
-        ax.plot(x, values, style, linewidth=2, label=label)
+    colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    for index, (label, values, style) in enumerate(series):
+        linestyle = "--" if "--" in style else ":" if ":" in style else "-."
+        ax.plot(x, values, color=colors[index % len(colors)], linestyle=linestyle,
+                linewidth=1.8, label=label)
     for position, label in markers or []:
         ax.axvline(x=position, color="red", linestyle="--", alpha=0.7)
         ax.annotate(label, (position, 0), xytext=(4, 8), textcoords="offset points", color="red", fontsize=8)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    ax.set_title(short(title, 90))
+    ax.set_xlabel(_math_symbol(xlabel))
+    ax.set_ylabel(_math_symbol(ylabel))
+    ax.set_title(title if title.startswith("$") else short(title, 90))
     ax.grid(True, alpha=0.3)
-    if len(series) > 1:
-        ax.legend()
+    if series:
+        ax.legend(frameon=False, fontsize=9, loc="best")
     return save_plot(fig, filename, ctx=ctx)
 
 
@@ -365,8 +393,9 @@ def evaluate_task(ctx, task_id, expr, independent=(), fixed=None, ranges=None, p
         x = sample_axis(ranges.get(var, (-5, 5)), points, f.pointwise)
         y = f(x)
         save_data({var: x, label: y}, "task_%d_evaluation.csv" % task_id, ctx=ctx)
-        _line_plot(ctx, "task_%d_evaluation.png" % task_id, x, [(label, y, "b-")], var,
-                   label, "%s = %s%s" % (label, short(expr, 60), _fixed_note(fixed)))
+        _line_plot(ctx, "task_%d_evaluation.png" % task_id, x,
+                   [(_expression_label(expr, [var], label), y, "-")], var, label,
+                   _fixed_math_title(_expression_label(expr, [var], label), fixed))
         summary["sweep"] = dict(variable=var, points=int(len(x)), **finite_stats(y))
     save_data(summary, "task_%d_evaluation.json" % task_id, ctx=ctx)
     return summary
@@ -383,8 +412,9 @@ def plot_task(ctx, task_id, expr, independent, fixed=None, ranges=None, points=2
         f = lambdify_expr(expr, [var], fixed)
         x = sample_axis(ranges.get(var, (-5, 5)), points, f.pointwise)
         y = f(x)
-        _line_plot(ctx, "task_%d_plot.png" % task_id, x, [(label, y, "b-")], var, label,
-                   "%s = %s%s" % (label, short(expr, 60), _fixed_note(fixed)))
+        formula = _expression_label(expr, [var], label)
+        _line_plot(ctx, "task_%d_plot.png" % task_id, x, [(formula, y, "-")], var, label,
+                   _fixed_math_title(formula, fixed))
         save_data({var: x, label: y}, "task_%d_plot_data.csv" % task_id, ctx=ctx)
         return dict(expression=str(expr), variable=var, fixed_parameters=fixed, **finite_stats(y))
 
@@ -396,15 +426,65 @@ def plot_task(ctx, task_id, expr, independent, fixed=None, ranges=None, points=2
     Y = f(X1, X2)
     fig = plt.figure(figsize=(12, 9))
     ax = fig.add_subplot(111, projection="3d")
-    surface = ax.plot_surface(X1, X2, np.ma.masked_invalid(Y), cmap="viridis", alpha=0.9)
-    ax.set_xlabel(var1)
-    ax.set_ylabel(var2)
-    ax.set_zlabel(label)
-    ax.set_title(short("%s = %s%s" % (label, short(expr, 60), _fixed_note(fixed)), 90))
-    fig.colorbar(surface, shrink=0.5, aspect=5)
+    surface = ax.plot_surface(X1, X2, np.ma.masked_invalid(Y), cmap="viridis",
+                              linewidth=0, antialiased=True)
+    formula = _expression_label(expr, [var1, var2], label)
+    ax.set_xlabel(_math_symbol(var1), labelpad=8)
+    ax.set_ylabel(_math_symbol(var2), labelpad=8)
+    ax.set_zlabel(_math_symbol(label), labelpad=8)
+    ax.set_title(_fixed_math_title(formula, fixed), pad=16)
+    fig.colorbar(surface, ax=ax, shrink=0.65, aspect=18, pad=0.1)
     save_plot(fig, "task_%d_surface_plot.png" % task_id, ctx=ctx)
     save_data({var1: X1, var2: X2, label: Y}, "task_%d_surface_data.csv" % task_id, ctx=ctx)
     return dict(expression=str(expr), variables=[var1, var2], fixed_parameters=fixed, **finite_stats(Y))
+
+
+def spectral_task(ctx, task_id, expr, independent, fixed=None, ranges=None, points=1024, label="f"):
+    """Compute a one-sided, Hann-windowed amplitude spectrum of a real-valued function."""
+    if not independent:
+        raise ValueError("Spectral analysis requires an independent variable.")
+    ranges = ranges or {}
+    variable = independent[0]
+    points = max(int(points), 4)
+    f = lambdify_expr(expr, [variable], fixed)
+    x = sample_axis(ranges.get(variable, (-5, 5)), points, f.pointwise, limit=points)
+    y = np.asarray(f(x), dtype=float)
+    valid = np.isfinite(x) & np.isfinite(y)
+    x, y = x[valid], y[valid]
+    if len(x) < 4:
+        raise ValueError("Spectral analysis requires at least four finite real samples.")
+    spacing = np.diff(x)
+    if not np.allclose(spacing, spacing[0], rtol=1e-7, atol=1e-12):
+        raise ValueError("Spectral analysis requires uniformly spaced samples.")
+    window = np.hanning(len(y))
+    coherent_gain = window.sum()
+    if coherent_gain == 0:
+        raise ValueError("The selected sampling window has zero coherent gain.")
+    spectrum = np.abs(np.fft.rfft((y - np.mean(y)) * window)) / coherent_gain
+    if len(y) % 2 == 0:
+        spectrum[1:-1] *= 2
+    else:
+        spectrum[1:] *= 2
+    frequencies = np.fft.rfftfreq(len(y), d=abs(float(spacing[0])))
+    spectrum_label = "$|X(f)|\\;\\left(%s\\right)$" % sp.latex(expr)
+    _line_plot(ctx, "task_%d_spectrum.png" % task_id, frequencies,
+               [(spectrum_label, spectrum, "-")], "f", "|X(f)|",
+               "$\\mathrm{Amplitude\\ spectrum}$")
+    save_data({"frequency": frequencies, "amplitude": spectrum},
+              "task_%d_spectrum.csv" % task_id, ctx=ctx)
+    dominant_index = 1 + int(np.argmax(spectrum[1:]))
+    summary = {
+        "expression": str(expr),
+        "latex": sp.latex(expr),
+        "variable": variable,
+        "sample_count": int(len(y)),
+        "frequency_resolution": float(frequencies[1] - frequencies[0]),
+        "dominant_frequency": float(frequencies[dominant_index]),
+        "dominant_amplitude": float(spectrum[dominant_index]),
+        "fixed_parameters": dict(fixed or {}),
+    }
+    save_data(summary, "task_%d_spectrum.json" % task_id, ctx=ctx)
+    return summary
 
 
 def _numeric_roots(g, low, high, samples=2000):
@@ -472,9 +552,10 @@ def solve_task(ctx, task_id, lhs, rhs=0, solve_for=None, fixed=None, ranges=None
 
     x = sample_axis((low, high), points, g.pointwise)
     y = g(x)
+    residual_label = "$%s$" % sp.latex(lhs - rhs)
     _line_plot(ctx, "task_%d_solutions_plot.png" % task_id, x,
-               [("%s - (%s)" % (short(lhs, 30), short(rhs, 30)), y, "b-")], solve_for, "lhs - rhs",
-               "Roots of %s = %s%s" % (short(lhs, 40), short(rhs, 40), _fixed_note(fixed)),
+               [(residual_label, y, "-")], solve_for, "lhs - rhs",
+               _fixed_math_title("$%s = %s$" % (sp.latex(lhs), sp.latex(rhs)), fixed),
                markers=[(root, "%.4g" % root) for root in roots[:10]])
     save_data(summary, "task_%d_solutions.json" % task_id, ctx=ctx)
     return summary
@@ -532,8 +613,9 @@ def optimize_task(ctx, task_id, expr, independent, fixed=None, ranges=None, dire
         for key in ("minimum", "maximum"):
             if summary.get(key):
                 markers.append((summary[key]["point"][names[0]], key[:3]))
-        _line_plot(ctx, "task_%d_optimization_plot.png" % task_id, axes[0], [("f", values, "b-")], names[0],
-                   "f", "Extrema of %s%s" % (short(expr, 60), _fixed_note(fixed)), markers=markers)
+        formula = _expression_label(expr, names)
+        _line_plot(ctx, "task_%d_optimization_plot.png" % task_id, axes[0], [(formula, values, "-")], names[0],
+                   "f", _fixed_math_title(formula, fixed), markers=markers)
     save_data(summary, "task_%d_optimization.json" % task_id, ctx=ctx)
     return summary
 
@@ -551,8 +633,9 @@ def integrate_task(ctx, task_id, expr, independent=(), fixed=None, ranges=None, 
             f = lambdify_expr(expr, [var], fixed)
             x = sample_axis(ranges.get(var, (-5, 5)), points, f.pointwise)
             y = f(x)
-            _line_plot(ctx, "task_%d_integration_plot.png" % task_id, x, [("integral", y, "b-")], var,
-                       "value", "%s%s" % (short(expr, 70), _fixed_note(fixed)))
+            formula = _expression_label(expr, [var])
+            _line_plot(ctx, "task_%d_integration_plot.png" % task_id, x,
+                       [(formula, y, "-")], var, "f", _fixed_math_title(formula, fixed))
             save_data({var: x, "integral": y}, "task_%d_integration.csv" % task_id, ctx=ctx)
             summary["sweep"] = dict(variable=var, **finite_stats(y))
         else:
@@ -582,11 +665,14 @@ def integrate_task(ctx, task_id, expr, independent=(), fixed=None, ranges=None, 
     x = sample_axis((low, high), points, f.pointwise)
     y = f(x)
     fig, ax = plt.subplots(figsize=(10, 6))
-    ax.plot(x, y, "b-", linewidth=2)
-    ax.fill_between(x, np.nan_to_num(y), alpha=0.3)
-    ax.set_xlabel(var)
-    ax.set_ylabel("integrand")
-    ax.set_title(short("Integral over [%g, %g] = %.6g%s" % (low, high, value, _fixed_note(fixed)), 90))
+    formula = _expression_label(expr, [var])
+    color = plt.rcParams["axes.prop_cycle"].by_key()["color"][0]
+    ax.plot(x, y, color=color, linewidth=1.8, label=formula)
+    ax.fill_between(x, np.nan_to_num(y), color=color, alpha=0.2)
+    ax.set_xlabel(_math_symbol(var))
+    ax.set_ylabel("$f$")
+    ax.set_title(_fixed_math_title(formula, fixed))
+    ax.legend(frameon=False, fontsize=9, loc="best")
     ax.grid(True, alpha=0.3)
     save_plot(fig, "task_%d_integration_plot.png" % task_id, ctx=ctx)
     save_data(summary, "task_%d_integration.json" % task_id, ctx=ctx)
@@ -615,8 +701,9 @@ def differentiate_task(ctx, task_id, expr, independent=(), fixed=None, ranges=No
         x = sample_axis(ranges.get(var, (-5, 5)), points, f.pointwise or df.pointwise)
         y, dy = f(x), df(x)
         _line_plot(ctx, "task_%d_differentiation_plot.png" % task_id, x,
-                   [("f", y, "b-"), ("df/d%s" % var, dy, "r--")], var, "value",
-                   "%s and its derivative%s" % (short(expr, 50), _fixed_note(fixed)))
+                   [(_expression_label(expr, [var]), y, "-"),
+                    (_expression_label(derivatives.get(var, sp.Integer(0)), [var], "f'"), dy, "--")],
+                   var, "f", _fixed_math_title(_expression_label(expr, [var]), fixed))
         save_data({var: x, "f": y, "df_d%s" % var: dy}, "task_%d_differentiation.csv" % task_id, ctx=ctx)
     save_data(summary, "task_%d_differentiation.json" % task_id, ctx=ctx)
     return summary
@@ -651,8 +738,9 @@ def series_task(ctx, task_id, expr, independent=(), fixed=None, ranges=None, ord
     s = lambdify_expr(expansion, [var], fixed)
     x = sample_axis((low, high), points, f.pointwise or s.pointwise)
     _line_plot(ctx, "task_%d_series_plot.png" % task_id, x,
-               [("f", f(x), "b-"), ("series (order %d)" % order, s(x), "r--")], var, "value",
-               "Series of %s about %s = %g" % (short(expr, 50), var, used))
+               [("$%s$" % sp.latex(expr), f(x), "-"),
+                ("$%s$" % sp.latex(expansion), s(x), "--")], var, "value",
+               "$\\mathrm{Series\\ comparison}$")
     save_data(summary, "task_%d_series.json" % task_id, ctx=ctx)
     return summary
 
@@ -671,7 +759,7 @@ def verify_task(ctx, task_id, lhs, rhs, independent=(), fixed=None, ranges=None,
         x = sample_axis(ranges.get(var, (-5, 5)), points, fl.pointwise or fr.pointwise, POINTWISE_LIMIT_VERIFY)
         left, right = fl(x), fr(x)
         _line_plot(ctx, "task_%d_verification_plot.png" % task_id, x,
-                   [("left: %s" % short(lhs, 40), left, "b-"), ("right: %s" % short(rhs, 40), right, "r--")],
+                   [("$%s$" % sp.latex(lhs), left, "-"), ("$%s$" % sp.latex(rhs), right, "--")],
                    var, "value", "Check of %s = %s%s" % (short(lhs, 30), short(rhs, 30), _fixed_note(fixed)))
         save_data({var: x, "lhs": left, "rhs": right, "abs_difference": np.abs(left - right)},
                   "task_%d_verification.csv" % task_id, ctx=ctx)
@@ -711,7 +799,7 @@ def symbolic_task(ctx, task_id, expr):
         "free_symbols": sorted(str(s) for s in expr.free_symbols),
         "unknown_functions": sorted({str(f.func) for f in expr.atoms(sp.core.function.AppliedUndef)}),
     }
-    ok, simplified = attempt(lambda: sp.simplify(expr), seconds=10)
+    ok, simplified = attempt(lambda: sp.simplify(expr))
     summary["simplified"] = str(simplified) if ok else None
     save_data(summary, "task_%d_symbolic.json" % task_id, ctx=ctx)
     return summary
@@ -729,7 +817,7 @@ def run_tasks(tasks, argv=None, default_output_dir=None):
     """
     parser = argparse.ArgumentParser(description="Run ParSub generated computations.")
     parser.add_argument("--output-dir", default=os.environ.get("PARSUB_OUTPUT_DIR") or default_output_dir or ".")
-    parser.add_argument("--timeout", type=float, default=float(os.environ.get("PARSUB_TASK_TIMEOUT", 120)),
+    parser.add_argument("--timeout", type=float, default=float(os.environ.get("PARSUB_TASK_TIMEOUT", 0)),
                         help="time limit per task in seconds (0 = unlimited)")
     parser.add_argument("--tasks", default="", help="comma separated task numbers to run (default: all)")
     args = parser.parse_args(argv)

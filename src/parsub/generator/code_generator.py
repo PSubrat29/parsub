@@ -153,6 +153,9 @@ fixed parameter values there and re-run the script.
         if goal == "plot":
             call = (f"plot_task(\n        ctx, {task_num}, expr, independent={independent!r},\n        {common},\n"
                     f"        points={points}, label={label!r},\n    )")
+        elif goal == "spectral":
+            call = (f"spectral_task(\n        ctx, {task_num}, expr, independent={independent!r},\n        {common},\n"
+                    f"        points={points}, label={label!r},\n    )")
         elif goal == "solve":
             solve_for = options.get("solve_for") or (independent[0] if independent else None)
             call = (f"solve_task(\n        ctx, {task_num}, lhs, rhs, solve_for={solve_for!r},\n        {common},\n"

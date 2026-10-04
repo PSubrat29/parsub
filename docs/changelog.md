@@ -2,6 +2,16 @@
 
 All notable changes to ParSub. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+- Generate an editable A0 portrait poster in LaTeX from each analyzed manuscript,
+  with source metadata, selected equations, analysis summaries, and embedded model curves.
+- Add spectral-analysis tasks using a Hann-windowed, one-sided FFT amplitude spectrum.
+- Improve plot color cycling, mathematical legends and 400-DPI output.
+- Make execution unlimited by default; overall and per-task time limits remain opt-in.
+- Add responsive sidebar navigation to the documentation website.
+- Document the 30,000-word LaTeX input capacity and scientific-package integration boundaries.
+
 ## 0.2.1 — 2 October 2026
 
 Packaging and documentation release; ParSub's code is unchanged from 0.2.0
