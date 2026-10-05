@@ -2,8 +2,10 @@
 
 All notable changes to ParSub. Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.2.2 - 5 October 2026 
 
+([PyPI page](https://pypi.org/project/parsub/0.2.2/),
+[GitHub release](https://github.com/PSubrat29/parsub/releases/tag/v0.2.2)).
 - Generate an editable A0 portrait poster in LaTeX from each analyzed manuscript,
   with source metadata, selected equations, analysis summaries, and embedded model curves.
 - Add spectral-analysis tasks using a Hann-windowed, one-sided FFT amplitude spectrum.

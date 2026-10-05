@@ -5,7 +5,7 @@ Turns the mathematics in LaTeX documents into runnable Python computations:
 LaTeX -> parsed expressions -> computation tasks -> generated script -> plots/data.
 """
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 __all__ = ["__version__", "analyze_latex", "analyze_latex_file", "run_generated_code"]
 
