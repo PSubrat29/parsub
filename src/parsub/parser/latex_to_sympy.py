@@ -307,7 +307,7 @@ def _rewrite_indexed_functions(latex: str, holders: _Placeholders) -> str:
 
 
 def _rewrite_derivatives(latex: str, holders: _Placeholders) -> str:
-    """``w''(z)`` or ``w^{\prime\prime}(z)`` -> placeholder(z) for the 2nd derivative of w."""
+    r"""``w''(z)`` or ``w^{\prime\prime}(z)`` -> placeholder(z) for the 2nd derivative of w."""
     def replace(match: "re.Match[str]") -> str:
         order = match.group(2).count("prime") if match.group(2) else len(match.group(3))
         return holders.new("derivative", match.group(1), order) + "("

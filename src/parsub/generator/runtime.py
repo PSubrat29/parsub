@@ -16,6 +16,7 @@ import argparse
 import json
 import math
 import os
+import re
 import signal
 import sys
 import threading
@@ -29,6 +30,8 @@ import matplotlib
 matplotlib.use("Agg")  # headless, file-only backend
 
 import matplotlib.pyplot as plt  # noqa: E402
+from matplotlib.mathtext import MathTextParser  # noqa: E402
+from matplotlib.text import Text  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 import sympy as sp  # noqa: E402
@@ -93,12 +96,52 @@ def _clean_json(value):
     return value
 
 
+# ------------------------------------------------- Matplotlib-safe math text
+# SymPy writes LaTeX that Matplotlib's "mathtext" cannot draw, e.g. \int\limits_a^b and
+# hyper()/meijerg() as \begin{matrix} .. \end{matrix}\middle| z.  Such a label used to make
+# savefig() raise ValueError and the whole task fail.
+_MATHTEXT = MathTextParser("path")
+
+
+def _mathtext_ok(text):
+    try:
+        _MATHTEXT.parse(text)
+        return True
+    except Exception:  # noqa: BLE001 - mathtext raises ValueError for unsupported LaTeX
+        return False
+
+
+def _mathtext_source(latex):
+    """Rewrite SymPy LaTeX into the subset that Matplotlib's mathtext can draw."""
+    latex = re.sub(r"\\(?:no)?limits(?![A-Za-z])", "", latex)  # \int\limits_a^b -> \int_a^b
+    # \begin{matrix} a \\ b \end{matrix}\middle| z  ->  a;\, b;\, z   (hyper, meijerg)
+    latex = re.sub(
+        r"\\begin\{matrix\}(.*?)\\end\{matrix\}",
+        lambda m: m.group(1).replace("&", r",\,").replace("\\\\", r";\,"),
+        latex,
+        flags=re.S,
+    )
+    return latex.replace(r"\middle|", r";\,")
+
+
+def _make_text_drawable(fig):
+    """Rewrite every ``$...$`` text of ``fig`` that mathtext rejects; use plain text as a last resort."""
+    for artist in fig.findobj(Text):
+        text = artist.get_text()
+        if text.count("$") < 2 or _mathtext_ok(text):
+            continue
+        parts = text.split("$")
+        fixed = "".join("$%s$" % _mathtext_source(p) if i % 2 else p for i, p in enumerate(parts))
+        artist.set_text(fixed if _mathtext_ok(fixed) else text.replace("$", ""))
+
+
 def save_plot(fig, filename, output_dir="./output/plots", ctx=None):
     """Save a Matplotlib figure at high resolution and close it."""
     if ctx is not None:
         output_dir = ctx.plots_dir
     os.makedirs(output_dir, exist_ok=True)
     filepath = os.path.join(output_dir, filename)
+    _make_text_drawable(fig)
     fig.savefig(filepath, dpi=PLOT_DPI, bbox_inches="tight")
     plt.close(fig)
     if ctx is not None:
